@@ -1,0 +1,25 @@
+appId: com.example.kotodama
+productName: kotodama
+directories:
+  buildResources: build
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - "**/*.node"
+mac:
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: 音声入力のためマイクを使用します
+    NSAppleEventsUsageDescription: 文字をカーソル位置に貼り付けるためにキー操作を送出します
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
