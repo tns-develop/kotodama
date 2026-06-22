@@ -1,0 +1,191 @@
+import { useEffect, useState } from 'react'
+import { DEFAULT_CONFIG, type AppConfig, type TranscriptionDelay } from '@shared/ipc'
+import { eventToAccelerator, isValidAccelerator, keySavedPlaceholder } from '../lib/accelerator'
+
+const DELAY_OPTIONS: TranscriptionDelay[] = ['minimal', 'low', 'medium', 'high', 'xhigh']
+
+export function SettingsView() {
+  const [config, setConfig] = useState<AppConfig | null>(null)
+  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [keySaved, setKeySaved] = useState(false)
+  const [message, setMessage] = useState('')
+  const [recordingKey, setRecordingKey] = useState(false)
+
+  useEffect(() => {
+    void (async () => {
+      setConfig(await window.api.getConfig())
+      setKeySaved(await window.api.hasApiKey())
+    })()
+  }, [])
+
+  // キー録音: capture フェーズでウィンドウ全体の keydown を捕捉
+  useEffect(() => {
+    if (!recordingKey) return
+    const onKey = (e: KeyboardEvent): void => {
+      e.preventDefault()
+      if (e.key === 'Escape') {
+        setRecordingKey(false)
+        return
+      }
+      const accel = eventToAccelerator(e)
+      if (accel) {
+        setConfig((prev) => (prev ? { ...prev, hotkey: accel } : prev))
+        setRecordingKey(false)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [recordingKey])
+
+  // ESC で閉じる（キー録音中は上の capture が優先されるため無視）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      if (recordingKey) return
+      window.api.closeSettings()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [recordingKey])
+
+  if (!config) return <div className="settings">読み込み中…</div>
+
+  const update = <K extends keyof AppConfig>(key: K, value: AppConfig[K]): void =>
+    setConfig({ ...config, [key]: value })
+
+  const onSave = async (): Promise<void> => {
+    if (!isValidAccelerator(config.hotkey)) {
+      setMessage('ホットキーが無効です（修飾キー＋通常キーの組み合わせが必要）')
+      return
+    }
+    try {
+      if (apiKeyInput.trim()) {
+        await window.api.saveApiKey(apiKeyInput.trim())
+        setApiKeyInput('')
+        setKeySaved(true)
+      }
+      const result = await window.api.setConfig(config)
+      setConfig(result.config)
+      if (!result.hotkeyOk) {
+        setMessage('ホットキーを登録できませんでした（他アプリと競合の可能性）。前の設定に戻しました')
+        return
+      }
+      setMessage('保存しました')
+      setTimeout(() => setMessage(''), 2000)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : '保存に失敗しました')
+    }
+  }
+
+  // フォームを既定値へ戻す（未保存状態。APIキーは対象外）
+  const onReset = (): void => {
+    setConfig({ ...DEFAULT_CONFIG })
+    setMessage('初期値に戻しました（未保存）')
+  }
+
+  return (
+    <div className="settings">
+      <h1>kotodama 設定</h1>
+
+      <label className="field">
+        <span>OpenAI APIキー {keySaved && <em>(保存済み)</em>}</span>
+        <input
+          type="password"
+          value={apiKeyInput}
+          placeholder={keySavedPlaceholder(keySaved)}
+          onChange={(e) => setApiKeyInput(e.target.value)}
+          autoComplete="off"
+        />
+        <small>safeStorage で暗号化して保存されます。</small>
+      </label>
+
+      <label className="field">
+        <span>モデル</span>
+        <input type="text" value={config.model} readOnly />
+      </label>
+
+      <label className="field">
+        <span>言語ヒント (空欄で自動判定)</span>
+        <input
+          type="text"
+          value={config.language}
+          placeholder="ja"
+          onChange={(e) => update('language', e.target.value.trim())}
+        />
+      </label>
+
+      <label className="field">
+        <span>遅延 / 精度 (delay)</span>
+        <select
+          value={config.delay}
+          onChange={(e) => update('delay', e.target.value as TranscriptionDelay)}
+        >
+          {DELAY_OPTIONS.map((d) => (
+            <option key={d} value={d}>
+              {d}
+              {d === 'minimal' ? '（最速）' : d === 'xhigh' ? '（高精度）' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="field field--row">
+        <input
+          type="checkbox"
+          checked={config.llmCorrection}
+          onChange={(e) => update('llmCorrection', e.target.checked)}
+        />
+        <span>漢字変換をLLMで文脈補正する（gpt-5.4-nano / 追加課金あり）</span>
+      </label>
+
+      <div className="field">
+        <span>録音トグルのホットキー</span>
+        <div className="hotkey-row">
+          <input
+            type="text"
+            value={config.hotkey}
+            placeholder="例: CommandOrControl+Shift+R"
+            onChange={(e) => update('hotkey', e.target.value.trim())}
+          />
+          <button
+            type="button"
+            className={`record-key${recordingKey ? ' record-key--active' : ''}`}
+            onClick={() => setRecordingKey((v) => !v)}
+          >
+            {recordingKey ? 'キーを押す…' : 'キーを録音'}
+          </button>
+        </div>
+        <small>Electron アクセラレータ形式（例: CommandOrControl+Shift+R）。直接入力も可</small>
+      </div>
+
+      <label className="field field--row">
+        <input
+          type="checkbox"
+          checked={config.doubleControl}
+          onChange={(e) => update('doubleControl', e.target.checked)}
+        />
+        <span>Control ダブルタップで録音開始、録音中は Control 1 回で終了（macOS は「入力監視」権限が必要）</span>
+      </label>
+
+      <label className="field field--row">
+        <input
+          type="checkbox"
+          checked={config.soundEnabled}
+          onChange={(e) => update('soundEnabled', e.target.checked)}
+        />
+        <span>録音の開始・終了時に効果音を鳴らす</span>
+      </label>
+
+      <div className="actions">
+        <button onClick={() => void onSave()}>保存</button>
+        <button className="secondary" onClick={() => window.api.closeSettings()}>
+          キャンセル
+        </button>
+        <button className="secondary" onClick={onReset}>
+          初期値に戻す
+        </button>
+        {message && <span className="message">{message}</span>}
+      </div>
+    </div>
+  )
+}
