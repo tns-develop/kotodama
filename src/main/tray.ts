@@ -66,7 +66,7 @@ export function initTray(trayHandlers: TrayHandlers, state: RecordingState, reco
 
 export function updateTray(state: RecordingState, recording: boolean): void {
   if (!tray || !handlers) return
-  tray.setToolTip(`kotodama (${STATE_LABELS[state]})`)
+  tray.setToolTip(`Kotodama (${STATE_LABELS[state]})`)
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: `状態: ${STATE_LABELS[state]}`, enabled: false },

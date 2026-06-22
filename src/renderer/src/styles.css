@@ -142,6 +142,120 @@ body {
   color: #2e9e5b;
 }
 
+/* macOS 権限セクション */
+.permissions {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.permissions h2 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.permissions-note {
+  font-size: 11px;
+  color: #888;
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.perm-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.perm-row:last-of-type {
+  margin-bottom: 0;
+}
+
+.perm-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.perm-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.perm-info small {
+  flex: 1 1 100%;
+  color: #888;
+  font-size: 11px;
+}
+
+.perm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.perm-actions button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.perm-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.perm-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.perm-badge--ok {
+  background: color-mix(in srgb, #2e9e5b 20%, transparent);
+  color: #2e9e5b;
+}
+
+.perm-badge--warn {
+  background: color-mix(in srgb, #f5a623 25%, transparent);
+  color: #c68400;
+}
+
+.perm-badge--bad {
+  background: color-mix(in srgb, #ff4d4f 20%, transparent);
+  color: #ff4d4f;
+}
+
+.perm-badge--na {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: #888;
+}
+
+.permissions-path {
+  margin: 10px 0 0;
+  font-size: 10px;
+  word-break: break-all;
+}
+
+.permissions-path code {
+  font-family: ui-monospace, monospace;
+}
+
+.perm-message {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #2e9e5b;
+}
+
 /* 録音中の浮遊ピル */
 .overlay {
   margin: 0;

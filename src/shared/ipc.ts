@@ -9,6 +9,10 @@ export const IPC = {
   saveApiKey: 'apikey:save',
   openSettings: 'settings:open',
   closeSettings: 'settings:close',
+  permissionsGetStatus: 'permissions:getStatus',
+  permissionsOpenPane: 'permissions:openPane',
+  permissionsCopyAppPath: 'permissions:copyAppPath',
+  permissionsRequestMic: 'permissions:requestMic',
   // main -> renderer
   recordingToggle: 'recording:toggle',
   recordingState: 'recording:state',
@@ -33,6 +37,8 @@ export interface AppConfig {
   doubleControl: boolean
   /** 録音開始/終了時に効果音を鳴らすか。既定 true */
   soundEnabled: boolean
+  /** 入力監視の案内ダイアログを「後で」にしたか */
+  inputMonitoringGuideDismissed: boolean
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -42,7 +48,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   hotkey: 'CommandOrControl+Shift+R',
   llmCorrection: false,
   doubleControl: true,
-  soundEnabled: true
+  soundEnabled: true,
+  inputMonitoringGuideDismissed: false
 }
 
 /** setConfig の結果。ホットキー登録の成否を UI に伝える。 */
@@ -63,6 +70,27 @@ export interface ToggleRecordingPayload {
   active: boolean
 }
 
+export type MacPermissionKind = 'microphone' | 'accessibility' | 'inputMonitoring'
+
+export type MacPermissionState =
+  | 'granted'
+  | 'denied'
+  | 'notDetermined'
+  | 'needsSetup'
+  | 'likelyOk'
+  | 'failed'
+  | 'notApplicable'
+  | 'unknown'
+
+export interface MacPermissionStatus {
+  microphone: MacPermissionState
+  accessibility: MacPermissionState
+  inputMonitoring: MacPermissionState
+  /** 配布 .app の絶対パス。開発時は空 */
+  appBundlePath: string
+  isPackaged: boolean
+}
+
 /** preload が contextBridge で renderer に公開する API */
 /** イベント購読の解除関数 */
 export type Unsubscribe = () => void
@@ -81,4 +109,9 @@ export interface KotodamaApi {
   saveApiKey(key: string): Promise<boolean>
   openSettings(): void
   closeSettings(): void
+  /** macOS のみ。他 OS では null */
+  getMacPermissions(doubleControl: boolean): Promise<MacPermissionStatus | null>
+  openMacPrivacyPane(kind: MacPermissionKind): Promise<void>
+  copyMacAppPath(): Promise<boolean>
+  requestMicAccess(): Promise<boolean>
 }

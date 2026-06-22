@@ -43,9 +43,9 @@ export function openSettingsWindow(): void {
   }
   settingsWindow = new BrowserWindow({
     width: 480,
-    height: 460,
+    height: 580,
     resizable: false,
-    title: 'kotodama 設定',
+    title: 'Kotodama 設定',
     webPreferences: {
       preload: preloadPath(),
       sandbox: false,

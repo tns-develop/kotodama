@@ -3,6 +3,7 @@ import {
   AppConfig,
   IPC,
   KotodamaApi,
+  MacPermissionStatus,
   RecordingStatePayload,
   SetConfigResult,
   ToggleRecordingPayload
@@ -32,7 +33,13 @@ const api: KotodamaApi = {
   hasApiKey: () => ipcRenderer.invoke(IPC.hasApiKey) as Promise<boolean>,
   saveApiKey: (key) => ipcRenderer.invoke(IPC.saveApiKey, key) as Promise<boolean>,
   openSettings: () => ipcRenderer.send(IPC.openSettings),
-  closeSettings: () => ipcRenderer.send(IPC.closeSettings)
+  closeSettings: () => ipcRenderer.send(IPC.closeSettings),
+  getMacPermissions: (doubleControl) =>
+    ipcRenderer.invoke(IPC.permissionsGetStatus, doubleControl) as Promise<MacPermissionStatus | null>,
+  openMacPrivacyPane: (kind) =>
+    ipcRenderer.invoke(IPC.permissionsOpenPane, kind) as Promise<void>,
+  copyMacAppPath: () => ipcRenderer.invoke(IPC.permissionsCopyAppPath) as Promise<boolean>,
+  requestMicAccess: () => ipcRenderer.invoke(IPC.permissionsRequestMic) as Promise<boolean>
 }
 
 contextBridge.exposeInMainWorld('api', api)

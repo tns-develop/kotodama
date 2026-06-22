@@ -1,5 +1,5 @@
 appId: com.example.kotodama
-productName: kotodama
+productName: Kotodama
 directories:
   buildResources: build
 files:
@@ -19,6 +19,7 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
+    CFBundleDisplayName: Kotodama
     NSMicrophoneUsageDescription: 音声入力のためマイクを使用します
     NSAppleEventsUsageDescription: 文字をカーソル位置に貼り付けるためにキー操作を送出します
 win:

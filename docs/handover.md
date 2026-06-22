@@ -175,7 +175,7 @@ npm run dev
 - [x] 浮遊ピル overlay（delta 逐次プレビュー、エラー文言）
 - [x] teardownSession（エラー/切断時の後始末統一）
 - [x] electron-builder.yml（mac entitlements、NSMicrophoneUsageDescription）
-- [ ] **配布ビルドの実機検証**（署名・公証・アイコンはプレースホルダ）
+- [ ] **配布ビルドの実機検証**（署名・公証・アイコンはプレースホルダ）— **macOS 実機 E2E 確認済**（2026-06-22）。Windows は [dist-verification-plan.md](./dist-verification-plan.md) フェーズ 2 待ち
 
 ---
 
@@ -227,8 +227,10 @@ npm run dev
 
 ### 配布
 
-- `npm run dist:mac` の署名・公証フロー未検証
-- Windows 実機未確認（コード上は Win 分岐あり）
+- **配布ビルド実機検証**（進捗・手順・記録）: [dist-verification-plan.md](./dist-verification-plan.md) — macOS PASS / Windows 待ち
+- **次工程（GHA + GitHub Releases）**: [release-ci-handover.md](./release-ci-handover.md) ← **次セッションはここから**
+- **macOS UX（2026-06-22）**: 表示名 `Kotodama`。権限案内は [`permissions.ts`](../src/main/permissions.ts) + 設定「macOS 権限」
+- 署名・公証・正式アイコンは未着手
 
 ---
 
@@ -267,10 +269,12 @@ const REALTIME_URL = 'wss://api.openai.com/v1/realtime?intent=transcription'
 
 ## 10. クイックスタート（次のセッション用）
 
-1. `docs/rule.md` — プロダクトゴール・背景
+1. [rule.md](./rule.md) — プロダクトゴール・背景
 2. **本書** — 現状・落とし穴
-3. `README.md` — コマンド一覧
-4. 変更時の触りどころ:
+3. **配布・CI 続き** → [release-ci-handover.md](./release-ci-handover.md)（GHA + GitHub Releases）
+4. **実機検証記録** → [dist-verification-plan.md](./dist-verification-plan.md)
+5. [README.md](../README.md) — コマンド一覧
+6. 変更時の触りどころ:
    - 接続/STT → `src/main/realtime.ts`
    - 録音ライフサイクル → `src/main/index.ts`（`startRecording` / `stopRecording` / `teardownSession`）
    - 音声 → `src/renderer/src/audio.ts`, `pcm-worklet.js`

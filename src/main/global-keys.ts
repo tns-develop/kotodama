@@ -23,18 +23,21 @@ type Uiohook = {
 
 let hook: Uiohook | null = null
 let running = false
+let uiohookLoadFailed = false
 let mode: CtrlKeyMode = 'idle'
 let lastTapAt = 0
 let trigger: () => void = () => {}
 
 function loadHook(): Uiohook | null {
   if (hook) return hook
+  if (uiohookLoadFailed) return null
   try {
     // 遅延 require。未対応環境でも import 時点でクラッシュさせない。
     const mod = require('uiohook-napi') as { uIOhook: Uiohook }
     hook = mod.uIOhook
     return hook
   } catch (err) {
+    uiohookLoadFailed = true
     console.error('[kotodama] uiohook load failed:', err instanceof Error ? err.message : err)
     return null
   }
@@ -61,6 +64,16 @@ export function setCtrlKeyMode(next: CtrlKeyMode): void {
   lastTapAt = 0
 }
 
+/** uiohook が稼働中か。 */
+export function isDoubleCtrlRunning(): boolean {
+  return running
+}
+
+/** uiohook の load/start に失敗したか。 */
+export function wasUiohookLoadFailed(): boolean {
+  return uiohookLoadFailed
+}
+
 /** Control キー検知を開始する。多重起動は無視。 */
 export function startDoubleCtrl(cb: () => void): void {
   trigger = cb
@@ -72,6 +85,7 @@ export function startDoubleCtrl(cb: () => void): void {
     h.start()
     running = true
   } catch (err) {
+    uiohookLoadFailed = true
     // start 失敗時にリスナーが残ると次回起動で二重登録→二重発火するため除去する
     try {
       h.removeAllListeners('keyup')

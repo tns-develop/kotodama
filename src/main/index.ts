@@ -7,9 +7,15 @@ import { initTray } from './tray'
 import { closeSession, getCurrentState, isRecording, toggleRecording } from './recording'
 import { applyDoubleControl, registerHotkey } from './hotkeys'
 import { registerIpcHandlers } from './ipc-handlers'
+import {
+  clearInputMonitoringDismissIfResolved,
+  guideInputMonitoringIfNeeded
+} from './permissions'
 
 process.on('uncaughtException', (err) => console.error('[kotodama] uncaughtException:', err))
 process.on('unhandledRejection', (reason) => console.error('[kotodama] unhandledRejection:', reason))
+
+app.setName('Kotodama')
 
 app.whenReady().then(() => {
   // マイクのみ許可
@@ -35,6 +41,8 @@ app.whenReady().then(() => {
   const config = loadConfig()
   registerHotkey(config.hotkey)
   applyDoubleControl(config.doubleControl)
+  clearInputMonitoringDismissIfResolved(config.doubleControl)
+  if (config.doubleControl) void guideInputMonitoringIfNeeded()
   console.log(
     `[kotodama] ready: tray & worker window initialized. hotkey=${config.hotkey}, apiKey=${hasApiKey() ? 'set' : 'unset'}`
   )

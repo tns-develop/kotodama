@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Build target
+        type: choice
+        options:
+          - all
+          - macos
+          - windows
+        default: all
+      tag:
+        description: Release tag (e.g. v0.1.0)
+        type: string
+        default: v0.1.0
+      prerelease:
+        description: Mark as prerelease
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: false
+
+jobs:
+  build-macos:
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'macos'
+    runs-on: macos-latest
+    env:
+      CSC_IDENTITY: '-'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run rebuild
+      - run: npx electron-rebuild -f -w uiohook-napi
+      - run: npm run dist:mac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dist
+          path: dist/Kotodama-*-arm64.dmg
+          if-no-files-found: error
+
+  build-windows:
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'windows'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run rebuild
+      - run: npx electron-rebuild -f -w uiohook-napi
+      - run: npm run dist:win
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win-dist
+          path: dist/Kotodama Setup *.exe
+          if-no-files-found: error
+
+  publish-release:
+    needs:
+      - build-macos
+      - build-windows
+    if: >-
+      always() &&
+      (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
+      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
+      (needs.build-macos.result == 'success' || needs.build-windows.result == 'success') &&
+      (
+        github.event_name != 'push' ||
+        (needs.build-macos.result == 'success' && needs.build-windows.result == 'success')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-dist'
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'push' && github.ref_name || github.event.inputs.tag }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: true
+          append_body: true
+          body: |
+            未署名ビルドのため、macOS Gatekeeper / Windows SmartScreen の警告が出る場合があります。
+          files: |
+            dist/Kotodama-*-arm64.dmg
+            dist/Kotodama Setup *.exe
+          # platform 単体 dispatch 時は片方の成果物しかない
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

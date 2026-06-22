@@ -1,8 +1,33 @@
-import { useEffect, useState } from 'react'
-import { DEFAULT_CONFIG, type AppConfig, type TranscriptionDelay } from '@shared/ipc'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  DEFAULT_CONFIG,
+  type AppConfig,
+  type MacPermissionKind,
+  type MacPermissionState,
+  type MacPermissionStatus,
+  type TranscriptionDelay
+} from '@shared/ipc'
 import { eventToAccelerator, isValidAccelerator, keySavedPlaceholder } from '../lib/accelerator'
 
 const DELAY_OPTIONS: TranscriptionDelay[] = ['minimal', 'low', 'medium', 'high', 'xhigh']
+
+const PERMISSION_LABELS: Record<MacPermissionState, string> = {
+  granted: '許可済み',
+  denied: '拒否',
+  notDetermined: '未設定',
+  needsSetup: '要設定',
+  likelyOk: '動作中（推定）',
+  failed: 'エラー',
+  notApplicable: '—',
+  unknown: '不明'
+}
+
+function permissionBadgeClass(state: MacPermissionState): string {
+  if (state === 'granted' || state === 'likelyOk') return 'perm-badge perm-badge--ok'
+  if (state === 'notApplicable') return 'perm-badge perm-badge--na'
+  if (state === 'failed' || state === 'denied') return 'perm-badge perm-badge--bad'
+  return 'perm-badge perm-badge--warn'
+}
 
 export function SettingsView() {
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -10,13 +35,23 @@ export function SettingsView() {
   const [keySaved, setKeySaved] = useState(false)
   const [message, setMessage] = useState('')
   const [recordingKey, setRecordingKey] = useState(false)
+  const [macPerms, setMacPerms] = useState<MacPermissionStatus | null>(null)
+  const [permMessage, setPermMessage] = useState('')
+  const [resetPending, setResetPending] = useState(false)
+
+  const refreshMacPermissions = useCallback(async (doubleControl: boolean) => {
+    const status = await window.api.getMacPermissions(doubleControl)
+    setMacPerms(status)
+  }, [])
 
   useEffect(() => {
     void (async () => {
-      setConfig(await window.api.getConfig())
+      const loaded = await window.api.getConfig()
+      setConfig(loaded)
       setKeySaved(await window.api.hasApiKey())
+      await refreshMacPermissions(loaded.doubleControl)
     })()
-  }, [])
+  }, [refreshMacPermissions])
 
   // キー録音: capture フェーズでウィンドウ全体の keydown を捕捉
   useEffect(() => {
@@ -48,10 +83,29 @@ export function SettingsView() {
     return () => window.removeEventListener('keydown', onKey)
   }, [recordingKey])
 
-  if (!config) return <div className="settings">読み込み中…</div>
+  const update = <K extends keyof AppConfig>(key: K, value: AppConfig[K]): void => {
+    setConfig((prev) => (prev ? { ...prev, [key]: value } : prev))
+    if (key === 'doubleControl' && typeof value === 'boolean') {
+      void refreshMacPermissions(value)
+    }
+  }
 
-  const update = <K extends keyof AppConfig>(key: K, value: AppConfig[K]): void =>
-    setConfig({ ...config, [key]: value })
+  const openPane = async (kind: MacPermissionKind): Promise<void> => {
+    await window.api.openMacPrivacyPane(kind)
+  }
+
+  const copyAppPath = async (): Promise<void> => {
+    const ok = await window.api.copyMacAppPath()
+    setPermMessage(ok ? 'アプリの場所をコピーしました' : '配布ビルドでのみコピーできます')
+    setTimeout(() => setPermMessage(''), 2500)
+  }
+
+  const requestMic = async (): Promise<void> => {
+    await window.api.requestMicAccess()
+    if (config) await refreshMacPermissions(config.doubleControl)
+  }
+
+  if (!config) return <div className="settings">読み込み中…</div>
 
   const onSave = async (): Promise<void> => {
     if (!isValidAccelerator(config.hotkey)) {
@@ -64,8 +118,18 @@ export function SettingsView() {
         setApiKeyInput('')
         setKeySaved(true)
       }
-      const result = await window.api.setConfig(config)
+      const result = await window.api.setConfig({
+        language: config.language,
+        delay: config.delay,
+        hotkey: config.hotkey,
+        llmCorrection: config.llmCorrection,
+        doubleControl: config.doubleControl,
+        soundEnabled: config.soundEnabled,
+        ...(resetPending ? { inputMonitoringGuideDismissed: false } : {})
+      })
+      setResetPending(false)
       setConfig(result.config)
+      await refreshMacPermissions(result.config.doubleControl)
       if (!result.hotkeyOk) {
         setMessage('ホットキーを登録できませんでした（他アプリと競合の可能性）。前の設定に戻しました')
         return
@@ -77,15 +141,16 @@ export function SettingsView() {
     }
   }
 
-  // フォームを既定値へ戻す（未保存状態。APIキーは対象外）
   const onReset = (): void => {
     setConfig({ ...DEFAULT_CONFIG })
+    setResetPending(true)
+    void refreshMacPermissions(DEFAULT_CONFIG.doubleControl)
     setMessage('初期値に戻しました（未保存）')
   }
 
   return (
     <div className="settings">
-      <h1>kotodama 設定</h1>
+      <h1>Kotodama 設定</h1>
 
       <label className="field">
         <span>OpenAI APIキー {keySaved && <em>(保存済み)</em>}</span>
@@ -164,8 +229,85 @@ export function SettingsView() {
           checked={config.doubleControl}
           onChange={(e) => update('doubleControl', e.target.checked)}
         />
-        <span>Control ダブルタップで録音開始、録音中は Control 1 回で終了（macOS は「入力監視」権限が必要）</span>
+        <span>Control ダブルタップで録音開始 / 録音中は Control 1 回で終了</span>
       </label>
+
+      {macPerms && (
+        <section className="permissions">
+          <h2>macOS 権限</h2>
+          <p className="permissions-note">
+            配布ビルドではシステム設定に <strong>Kotodama</strong> が表示されます。入力監視は一覧に無い場合「＋」で
+            .app を追加してください。
+          </p>
+
+          <div className="perm-row">
+            <div className="perm-info">
+              <span className="perm-name">マイク</span>
+              <span className={permissionBadgeClass(macPerms.microphone)}>
+                {PERMISSION_LABELS[macPerms.microphone]}
+              </span>
+            </div>
+            <div className="perm-actions">
+              <button type="button" className="secondary" onClick={() => void requestMic()}>
+                許可を要求
+              </button>
+              <button type="button" className="secondary" onClick={() => void openPane('microphone')}>
+                設定を開く
+              </button>
+            </div>
+          </div>
+
+          <div className="perm-row">
+            <div className="perm-info">
+              <span className="perm-name">アクセシビリティ</span>
+              <span className={permissionBadgeClass(macPerms.accessibility)}>
+                {PERMISSION_LABELS[macPerms.accessibility]}
+              </span>
+              <small>貼り付け（Cmd+V）に必要</small>
+            </div>
+            <div className="perm-actions">
+              <button type="button" className="secondary" onClick={() => void openPane('accessibility')}>
+                設定を開く
+              </button>
+            </div>
+          </div>
+
+          <div className="perm-row">
+            <div className="perm-info">
+              <span className="perm-name">入力監視</span>
+              <span className={permissionBadgeClass(macPerms.inputMonitoring)}>
+                {PERMISSION_LABELS[macPerms.inputMonitoring]}
+              </span>
+              <small>Control ダブルタップに必要（状態は推定）</small>
+            </div>
+            <div className="perm-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={!config.doubleControl}
+                onClick={() => void openPane('inputMonitoring')}
+              >
+                設定を開く
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={!config.doubleControl || !macPerms.isPackaged}
+                onClick={() => void copyAppPath()}
+              >
+                場所をコピー
+              </button>
+            </div>
+          </div>
+
+          {macPerms.appBundlePath && (
+            <p className="permissions-path">
+              <code>{macPerms.appBundlePath}</code>
+            </p>
+          )}
+          {permMessage && <p className="perm-message">{permMessage}</p>}
+        </section>
+      )}
 
       <label className="field field--row">
         <input
