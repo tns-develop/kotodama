@@ -7,6 +7,11 @@ files:
   - package.json
 asarUnpack:
   - "**/*.node"
+extraResources:
+  - from: resources
+    to: resources
+    filter:
+      - "**/*"
 mac:
   category: public.app-category.productivity
   hardenedRuntime: true

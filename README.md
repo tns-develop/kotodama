@@ -47,6 +47,28 @@ src/
 - **アクセシビリティ**: 貼り付け（キー送出）に必須。未許可だと貼り付けが無反応になる（ハマり所No.1）。
   `システム設定 > プライバシーとセキュリティ > アクセシビリティ` で許可する（開発中は Electron / ターミナル）。
 
+## トレイアイコン（メニューバー）の変更
+
+メニューバー（macOS は画面上部）に表示されるアイコンは差し替え可能。
+
+1. 以下のファイルを `resources/` に配置する（置くだけで自動的に使われ、未配置なら従来の黒丸を実行時生成）。
+   - `resources/trayTemplate.png` … 16x16 px（通常解像度）
+   - `resources/trayTemplate@2x.png` … 32x32 px（Retina 用、任意）
+2. macOS テンプレート画像の条件:
+   - PNG / 背景は透過
+   - 図柄は **黒（+アルファ）のモノクロ**。色は無視され、メニューバーの明暗（ライト/ダーク）に応じて自動着色
+   - 基本 16x16 px、`@2x` は 32x32 px（18x18 / 36x36 でも可）
+   - コードで `setTemplateImage(true)` 済みのため命名の `Template` は必須ではないが踏襲推奨
+
+仕組み・詳細は [resources/README.md](resources/README.md) を参照。配布ビルドでは `electron-builder.yml` の `extraResources` で `resources/` が同梱される。
+
+## 効果音（SE）
+
+録音の開始・終了時に効果音を鳴らせる（設定画面の「録音の開始・終了時に効果音を鳴らす」で ON/OFF、既定 ON）。
+
+- `src/renderer/public/sounds/start.mp3`（開始）/ `stop.mp3`（終了）を配置する。詳細は [src/renderer/public/sounds/README.md](src/renderer/public/sounds/README.md)。
+- 終了音は正常完了時のみ。ESC キャンセル・エラー時は鳴らない。
+
 ## ビルド・配布
 
 ```bash

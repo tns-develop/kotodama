@@ -468,4 +468,16 @@ npx electron-builder --win    # .exe (NSIS)
 - Qiita / hmkc1220 記事一覧: https://qiita.com/hmkc1220
 - Open Super Whisper（V1〜V2 / Python実装の参考）: https://github.com/TakanariShimbo/open-super-whisper
 - Electron: https://www.electronjs.org/docs/latest / globalShortcut / safeStorage / electron-builder / nut.js 各公式ドキュメント
+
+---
+
+## 10. 実装引き継ぎ（2026-06-17）
+
+MVP（音声入力→カーソル貼り付け）まで実装済み。**次の LLM / 開発者は [handover.md](./handover.md) を先に読むこと。**
+
+本書（rule.md）は設計・調査資料。handover.md には以下を記載:
+
+- rule.md からの GA 移行差分（Beta ヘッダ廃止、session.update ネスト構造、セキュア構成）
+- 実際に遭遇した障害と修正（quota、音声 0 バイト、CSP、AudioContext.resume）
+- ログの読み方、macOS 権限、未着手の改善項目
 </content>

@@ -62,6 +62,49 @@ body {
   font-size: 11px;
 }
 
+.field--row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.field--row span {
+  font-weight: 400;
+}
+
+.field--row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.hotkey-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.hotkey-row input {
+  flex: 1 1 auto;
+}
+
+.record-key {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.record-key--active {
+  border-color: #ff4d4f;
+  color: #ff4d4f;
+}
+
 .actions {
   display: flex;
   align-items: center;
@@ -84,6 +127,16 @@ body {
   background: #2f6fe0;
 }
 
+.actions button.secondary {
+  background: transparent;
+  color: inherit;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.actions button.secondary:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
 .message {
   font-size: 13px;
   color: #2e9e5b;
@@ -94,8 +147,9 @@ body {
   margin: 0;
   background: transparent;
   display: flex;
-  justify-content: center;
-  align-items: flex-end;
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding: 4px;
   height: 100vh;
   overflow: hidden;
   -webkit-app-region: no-drag;
@@ -144,9 +198,12 @@ body {
 
 .pill .partial {
   opacity: 0.85;
-  white-space: nowrap;
+  white-space: normal;
   overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
 }
 
 /* エラー文言は折り返して最大2行まで表示（全文は npm run dev の端末で確認） */

@@ -14,11 +14,14 @@ import {
   AppConfig,
   IPC,
   RecordingState,
-  RecordingStatePayload
+  RecordingStatePayload,
+  SetConfigResult
 } from '@shared/ipc'
 import { hasApiKey, loadApiKey, loadConfig, saveApiKey, saveConfig } from './store'
 import { createSttAdapter, SttSession } from './realtime'
 import { injectText } from './text-injector'
+import { postProcess } from './post-process'
+import { setCtrlKeyMode, startDoubleCtrl, stopDoubleCtrl } from './global-keys'
 import { ensureMicrophoneAccess, guideAccessibilityIfNeeded } from './permissions'
 
 const RENDERER_DEV_URL = process.env['ELECTRON_RENDERER_URL']
@@ -88,7 +91,7 @@ function ensureOverlayWindow(): BrowserWindow {
   if (overlayWindow && !overlayWindow.isDestroyed()) return overlayWindow
   overlayWindow = new BrowserWindow({
     width: 460,
-    height: 120,
+    height: 200,
     show: false,
     frame: false,
     transparent: true,
@@ -115,12 +118,16 @@ function ensureOverlayWindow(): BrowserWindow {
 
 function showOverlay(): void {
   const win = ensureOverlayWindow()
-  const { workArea } = screen.getPrimaryDisplay()
+  const cursor = screen.getCursorScreenPoint()
+  const { workArea } = screen.getDisplayNearestPoint(cursor)
   const [w, h] = win.getSize()
-  win.setPosition(
-    Math.round(workArea.x + (workArea.width - w) / 2),
-    Math.round(workArea.y + workArea.height - h - 80)
-  )
+  // カーソルの少し下・やや右にピルを置く（カーソル自体を隠さないため）。
+  // 録音開始時のみ配置し、録音中の常時追従はしない。
+  const clamp = (value: number, min: number, max: number): number =>
+    Math.max(min, Math.min(value, max))
+  const x = clamp(cursor.x + 16, workArea.x, workArea.x + workArea.width - w)
+  const y = clamp(cursor.y + 20, workArea.y, workArea.y + workArea.height - h)
+  win.setPosition(Math.round(x), Math.round(y))
   win.showInactive()
 }
 
@@ -141,7 +148,21 @@ function setState(state: RecordingState, message?: string): void {
   updateTray()
 }
 
+/**
+ * トレイアイコン。`resources/trayTemplate.png`（+ @2x）があればそれを使い、
+ * 無ければ従来の黒丸を実行時生成する。差し替え手順・仕様は README 参照。
+ */
 function createTrayIcon(): Electron.NativeImage {
+  const base = app.isPackaged ? process.resourcesPath : app.getAppPath()
+  const fromFile = nativeImage.createFromPath(join(base, 'resources', 'trayTemplate.png'))
+  if (!fromFile.isEmpty()) {
+    fromFile.setTemplateImage(true)
+    return fromFile
+  }
+  return createFallbackTrayIcon()
+}
+
+function createFallbackTrayIcon(): Electron.NativeImage {
   const size = 18
   const buffer = Buffer.alloc(size * size * 4)
   const cx = (size - 1) / 2
@@ -189,6 +210,8 @@ function updateTray(): void {
  * 必ずここを通すことで「recording が true のまま固着して復帰不能になる」事故を防ぐ。
  */
 function teardownSession(finalState: RecordingState, message?: string): void {
+  // 録音中だけ一時登録していた Escape を必ず解除する（成功・エラー・切断のどの経路でも通る）
+  globalShortcut.unregister('Escape')
   if (finalizeTimer) {
     clearTimeout(finalizeTimer)
     finalizeTimer = null
@@ -207,6 +230,7 @@ function teardownSession(finalState: RecordingState, message?: string): void {
   } else {
     hideOverlay()
   }
+  setCtrlKeyMode('idle')
 }
 
 async function startRecording(): Promise<void> {
@@ -229,7 +253,10 @@ async function startRecording(): Promise<void> {
 
   const config = loadConfig()
   recording = true
+  setCtrlKeyMode('stop')
   appendedBytes = 0
+  // 録音中だけ Escape をグローバル登録し、コミットせず中断できるようにする（best-effort）
+  globalShortcut.register('Escape', () => cancelRecording())
   setState('connecting')
   showOverlay()
   console.log(`[kotodama] connecting: model=${config.model}, lang=${config.language || 'auto'}, delay=${config.delay}`)
@@ -245,7 +272,8 @@ async function startRecording(): Promise<void> {
       broadcast(IPC.transcriptCompleted, text)
       if (text.trim()) {
         try {
-          await injectText(text)
+          const finalText = await postProcess(text, config, apiKey)
+          await injectText(finalText)
         } catch (err) {
           teardownSession('error', err instanceof Error ? err.message : '貼り付けに失敗しました')
           return
@@ -285,14 +313,47 @@ async function toggleRecording(): Promise<void> {
   else await startRecording()
 }
 
-function registerHotkey(accelerator: string): void {
+/** 録音中の中断。commit を呼ばないため文字起こし結果は貼り付けられない。 */
+function cancelRecording(): void {
+  if (!recording) return
+  teardownSession('idle')
+}
+
+/** 現在有効に登録できているホットキー。登録失敗時の復帰先に使う。 */
+let activeHotkey = ''
+
+function registerHotkey(accelerator: string): boolean {
   globalShortcut.unregisterAll()
   try {
     const ok = globalShortcut.register(accelerator, () => void toggleRecording())
-    if (!ok) console.error(`ホットキーの登録に失敗しました: ${accelerator}`)
+    if (ok) {
+      activeHotkey = accelerator
+      return true
+    }
+    console.error(`ホットキーの登録に失敗しました: ${accelerator}`)
   } catch (err) {
     console.error('ホットキー登録エラー:', err)
   }
+  // 失敗時は直前の有効ホットキーへ復帰させ、無反応状態を避ける
+  if (activeHotkey && activeHotkey !== accelerator) {
+    try {
+      globalShortcut.register(activeHotkey, () => void toggleRecording())
+    } catch {
+      /* noop */
+    }
+  }
+  return false
+}
+
+/** Control キー用。toggleRecording は finalizing 中も start するため使わない。 */
+function onCtrlKey(): void {
+  if (recording) void stopRecording()
+  else if (currentState !== 'finalizing') void startRecording()
+}
+
+function applyDoubleControl(enabled: boolean): void {
+  if (enabled) startDoubleCtrl(onCtrlKey)
+  else stopDoubleCtrl()
 }
 
 function registerIpcHandlers(): void {
@@ -310,12 +371,18 @@ function registerIpcHandlers(): void {
     broadcast(IPC.recordingState, { state: currentState } satisfies RecordingStatePayload)
   })
   ipcMain.on(IPC.openSettings, () => openSettingsWindow())
+  ipcMain.on(IPC.closeSettings, () => settingsWindow?.close())
 
   ipcMain.handle(IPC.getConfig, () => loadConfig())
-  ipcMain.handle(IPC.setConfig, (_e, partial: Partial<AppConfig>) => {
-    const merged = saveConfig(partial)
-    registerHotkey(merged.hotkey)
-    return merged
+  ipcMain.handle(IPC.setConfig, (_e, partial: Partial<AppConfig>): SetConfigResult => {
+    let merged = saveConfig(partial)
+    const hotkeyOk = registerHotkey(merged.hotkey)
+    // 登録に失敗したら直前の有効ホットキーへ戻して保存し直す
+    if (!hotkeyOk && activeHotkey && merged.hotkey !== activeHotkey) {
+      merged = saveConfig({ hotkey: activeHotkey })
+    }
+    applyDoubleControl(merged.doubleControl)
+    return { config: merged, hotkeyOk }
   })
   ipcMain.handle(IPC.hasApiKey, () => hasApiKey())
   ipcMain.handle(IPC.saveApiKey, (_e, key: string) => {
@@ -339,6 +406,7 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   const config = loadConfig()
   registerHotkey(config.hotkey)
+  applyDoubleControl(config.doubleControl)
   console.log(
     `[kotodama] ready: tray & worker window initialized. hotkey=${config.hotkey}, apiKey=${hasApiKey() ? 'set' : 'unset'}`
   )
@@ -350,5 +418,6 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  stopDoubleCtrl()
   sttSession?.close()
 })
