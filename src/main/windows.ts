@@ -43,7 +43,7 @@ export function openSettingsWindow(): void {
   }
   settingsWindow = new BrowserWindow({
     width: 480,
-    height: 580,
+    height: 620,
     resizable: false,
     title: 'Kotodama 設定',
     webPreferences: {

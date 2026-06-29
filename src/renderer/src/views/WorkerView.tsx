@@ -24,7 +24,11 @@ export function WorkerView() {
         if (micRef.current || startingRef.current) return
         startingRef.current = true
         try {
-          micRef.current = await startMic((buf) => window.api.sendPcm(buf))
+          const cfg = await window.api.getConfig()
+          micRef.current = await startMic(
+            (buf) => window.api.sendPcm(buf),
+            cfg.microphoneDeviceId || undefined
+          )
         } catch (err) {
           const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
           console.error('マイク取得に失敗:', err)

@@ -9,15 +9,19 @@ export interface MicHandle {
  * getUserMedia は renderer(Chromium) でのみ利用可能なため音声取得はここで行い、
  * 生成した PCM を IPC で main へ送る(セキュア構成)。
  */
-export async function startMic(onPcm: (buf: ArrayBuffer) => void): Promise<MicHandle> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      channelCount: 1,
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true
-    }
-  })
+export async function startMic(
+  onPcm: (buf: ArrayBuffer) => void,
+  deviceId?: string
+): Promise<MicHandle> {
+  const audio: MediaTrackConstraints = {
+    channelCount: 1,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true
+  }
+  if (deviceId) audio.deviceId = { exact: deviceId }
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio })
 
   const ctx = new AudioContext({ sampleRate: 24000 })
   const blob = new Blob([workletSource], { type: 'application/javascript' })

@@ -8,6 +8,7 @@ import {
   type TranscriptionDelay
 } from '@shared/ipc'
 import { eventToAccelerator, isValidAccelerator, keySavedPlaceholder } from '../lib/accelerator'
+import { listAudioInputDevices, type AudioInputDevice } from '../lib/audio-devices'
 
 const DELAY_OPTIONS: TranscriptionDelay[] = ['minimal', 'low', 'medium', 'high', 'xhigh']
 
@@ -38,6 +39,11 @@ export function SettingsView() {
   const [macPerms, setMacPerms] = useState<MacPermissionStatus | null>(null)
   const [permMessage, setPermMessage] = useState('')
   const [resetPending, setResetPending] = useState(false)
+  const [audioDevices, setAudioDevices] = useState<AudioInputDevice[]>([])
+
+  const refreshAudioDevices = useCallback(async () => {
+    setAudioDevices(await listAudioInputDevices())
+  }, [])
 
   const refreshMacPermissions = useCallback(async (doubleControl: boolean) => {
     const status = await window.api.getMacPermissions(doubleControl)
@@ -50,8 +56,9 @@ export function SettingsView() {
       setConfig(loaded)
       setKeySaved(await window.api.hasApiKey())
       await refreshMacPermissions(loaded.doubleControl)
+      await refreshAudioDevices()
     })()
-  }, [refreshMacPermissions])
+  }, [refreshMacPermissions, refreshAudioDevices])
 
   // キー録音: capture フェーズでウィンドウ全体の keydown を捕捉
   useEffect(() => {
@@ -103,6 +110,7 @@ export function SettingsView() {
   const requestMic = async (): Promise<void> => {
     await window.api.requestMicAccess()
     if (config) await refreshMacPermissions(config.doubleControl)
+    await refreshAudioDevices()
   }
 
   if (!config) return <div className="settings">読み込み中…</div>
@@ -135,6 +143,7 @@ export function SettingsView() {
         llmCorrection: config.llmCorrection,
         doubleControl: config.doubleControl,
         soundEnabled: config.soundEnabled,
+        microphoneDeviceId: config.microphoneDeviceId,
         ...(resetPending ? { inputMonitoringGuideDismissed: false } : {})
       })
       setResetPending(false)
@@ -203,6 +212,26 @@ export function SettingsView() {
             </option>
           ))}
         </select>
+      </label>
+
+      <label className="field">
+        <span>使用するマイク</span>
+        <select
+          value={config.microphoneDeviceId}
+          onChange={(e) => update('microphoneDeviceId', e.target.value)}
+        >
+          <option value="">システム既定</option>
+          {audioDevices.map((d) => (
+            <option key={d.deviceId} value={d.deviceId}>
+              {d.label}
+            </option>
+          ))}
+          {config.microphoneDeviceId &&
+            !audioDevices.some((d) => d.deviceId === config.microphoneDeviceId) && (
+              <option value={config.microphoneDeviceId}>以前のデバイス（未接続）</option>
+            )}
+        </select>
+        <small>マイク権限許可後にデバイス名が表示されます。</small>
       </label>
 
       <label className="field field--row">

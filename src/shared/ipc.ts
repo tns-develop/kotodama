@@ -39,6 +39,8 @@ export interface AppConfig {
   soundEnabled: boolean
   /** 入力監視の案内ダイアログを「後で」にしたか */
   inputMonitoringGuideDismissed: boolean
+  /** 使用するマイクの deviceId。空文字なら OS 既定 */
+  microphoneDeviceId: string
 }
 
 export function getDefaultConfig(platform: NodeJS.Platform): AppConfig {
@@ -50,7 +52,8 @@ export function getDefaultConfig(platform: NodeJS.Platform): AppConfig {
     llmCorrection: false,
     doubleControl: true,
     soundEnabled: true,
-    inputMonitoringGuideDismissed: false
+    inputMonitoringGuideDismissed: false,
+    microphoneDeviceId: ''
   }
 }
 
