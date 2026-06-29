@@ -117,7 +117,7 @@ export function SettingsView() {
 
   const isWin = window.api.platform === 'win32'
   const doubleTapLabel = isWin
-    ? 'Alt ダブルタップで録音開始 / 録音中は Alt 1 回で終了'
+    ? 'Right Ctrl ダブルタップで録音開始 / 録音中は Right Ctrl 1 回で終了'
     : 'Control ダブルタップで録音開始 / 録音中は Control 1 回で終了'
 
   const onSave = async (): Promise<void> => {
@@ -262,7 +262,7 @@ export function SettingsView() {
         </div>
         <small>
           {isWin
-            ? '空欄の場合は Alt ダブルタップのみ。accelerator を入力すると globalShortcut も併用できます'
+            ? '空欄の場合は Right Ctrl ダブルタップのみ。accelerator を入力すると globalShortcut も併用できます'
             : 'Electron アクセラレータ形式（例: CommandOrControl+Shift+R）。直接入力も可'}
         </small>
       </div>

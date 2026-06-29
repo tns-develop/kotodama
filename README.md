@@ -47,6 +47,18 @@ src/
 - **アクセシビリティ**: 貼り付け（キー送出）に必須。未許可だと貼り付けが無反応になる（ハマり所No.1）。
   `システム設定 > プライバシーとセキュリティ > アクセシビリティ` で許可する（開発中は Electron / ターミナル）。
 
+## アプリアイコン（Dock / Finder / .app）
+
+配布ビルド用のアプリアイコンは `build/` に配置する（`electron-builder.yml` の `buildResources: build`）。
+
+1. 推奨: **`build/icon.png`** … **1024×1024 px** の正方形 PNG 1枚
+   - `npm run dist:mac` / `dist:win` 時に electron-builder が `.icns` / `.ico` を自動生成する
+2. 個別配置も可: `build/icon.icns`（macOS）/ `build/icon.ico`（Windows）
+3. デザインの目安:
+   - フルカラー可（トレイアイコンとは別素材）
+   - 32px 程度まで縮小しても形が分かるよう、太めのシルエット・余白を確保
+   - macOS の角丸は OS 側がマスクするため、正方形キャンバスいっぱいに描いてよい
+
 ## トレイアイコン（メニューバー）の変更
 
 メニューバー（macOS は画面上部）に表示されるアイコンは差し替え可能。
@@ -77,5 +89,5 @@ npm run dist:mac   # .dmg / .app（要 Apple Developer 署名・公証）
 npm run dist:win   # .exe (NSIS)
 ```
 
-ネイティブモジュール（nut.js）を含むため、配布ビルドは対象OSのビルドホストで `npm run rebuild` 済みであること。トレイアイコンは現在プレースホルダ（実行時生成）のため、配布時は `build/` に正式アイコンを用意することを推奨。
+ネイティブモジュール（nut.js）を含むため、配布ビルドは対象OSのビルドホストで `npm run rebuild` 済みであること。アプリアイコン（`build/icon.png`）とトレイアイコン（`resources/trayTemplate.png`）はリポジトリに同梱済み。差し替え時は上記の節を参照。
 

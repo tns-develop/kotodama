@@ -1,5 +1,5 @@
 /**
- * 修飾キー操作を検知してコールバックを呼ぶ（Windows=Alt、それ以外=Control）。
+ * 修飾キー操作を検知してコールバックを呼ぶ（Windows=Right Ctrl、それ以外=Control 左右）。
  * - idle: ダブルタップ（短時間に2回押し）で発火 — 録音開始用
  * - stop: 単押しで発火 — 録音中の終了用
  *
@@ -9,10 +9,10 @@
  */
 
 const DOUBLE_TAP_WINDOW_MS = 400
-// uiohook-napi のキーコード（左右の Control / Alt）
+// uiohook-napi のキーコード（Control）。Windows は Right Ctrl のみ（左 Ctrl の Ctrl+C/V 等と競合回避）
+const RIGHT_CTRL_KEYCODES = new Set([3613])
 const CTRL_KEYCODES = new Set([29, 3613])
-const ALT_KEYCODES = new Set([56, 3640])
-const TARGET_KEYCODES = process.platform === 'win32' ? ALT_KEYCODES : CTRL_KEYCODES
+const TARGET_KEYCODES = process.platform === 'win32' ? RIGHT_CTRL_KEYCODES : CTRL_KEYCODES
 
 export type CtrlKeyMode = 'idle' | 'stop'
 
