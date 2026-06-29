@@ -29,11 +29,11 @@ export interface AppConfig {
   language: string
   /** 遅延/精度トレードオフ */
   delay: TranscriptionDelay
-  /** 録音トグルのグローバルホットキー (Electron accelerator) */
+  /** 録音トグルのグローバルホットキー (Electron accelerator)。空文字なら未登録 */
   hotkey: string
   /** completed テキストを LLM で文脈補正するか (gpt-5.4-nano)。既定 false */
   llmCorrection: boolean
-  /** Control ダブルタップで録音開始・録音中は Control 1 回で終了するか（ネイティブキーフック使用） */
+  /** 修飾キー ダブルタップで録音開始・録音中は 1 回で終了するか（Windows=Alt、他=Control / uiohook） */
   doubleControl: boolean
   /** 録音開始/終了時に効果音を鳴らすか。既定 true */
   soundEnabled: boolean
@@ -41,16 +41,20 @@ export interface AppConfig {
   inputMonitoringGuideDismissed: boolean
 }
 
-export const DEFAULT_CONFIG: AppConfig = {
-  model: 'gpt-realtime-whisper',
-  language: 'ja',
-  delay: 'minimal',
-  hotkey: 'CommandOrControl+Shift+R',
-  llmCorrection: false,
-  doubleControl: true,
-  soundEnabled: true,
-  inputMonitoringGuideDismissed: false
+export function getDefaultConfig(platform: NodeJS.Platform): AppConfig {
+  return {
+    model: 'gpt-realtime-whisper',
+    language: 'ja',
+    delay: 'minimal',
+    hotkey: platform === 'win32' ? '' : 'CommandOrControl+Shift+R',
+    llmCorrection: false,
+    doubleControl: true,
+    soundEnabled: true,
+    inputMonitoringGuideDismissed: false
+  }
 }
+
+export const DEFAULT_CONFIG: AppConfig = getDefaultConfig('darwin')
 
 /** setConfig の結果。ホットキー登録の成否を UI に伝える。 */
 export interface SetConfigResult {
@@ -96,6 +100,7 @@ export interface MacPermissionStatus {
 export type Unsubscribe = () => void
 
 export interface KotodamaApi {
+  platform: NodeJS.Platform
   onToggle(cb: (active: boolean) => void): Unsubscribe
   onState(cb: (payload: RecordingStatePayload) => void): Unsubscribe
   onDelta(cb: (text: string) => void): Unsubscribe

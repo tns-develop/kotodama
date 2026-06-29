@@ -20,6 +20,7 @@ function listen<T>(channel: string, cb: (arg: T) => void): () => void {
 }
 
 const api: KotodamaApi = {
+  platform: process.platform,
   onToggle: (cb) =>
     listen<ToggleRecordingPayload>(IPC.recordingToggle, (payload) => cb(payload.active)),
   onState: (cb) => listen<RecordingStatePayload>(IPC.recordingState, (payload) => cb(payload)),

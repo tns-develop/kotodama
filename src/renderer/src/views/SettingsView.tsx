@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  DEFAULT_CONFIG,
+  getDefaultConfig,
   type AppConfig,
   type MacPermissionKind,
   type MacPermissionState,
@@ -107,8 +107,18 @@ export function SettingsView() {
 
   if (!config) return <div className="settings">読み込み中…</div>
 
+  const isWin = window.api.platform === 'win32'
+  const doubleTapLabel = isWin
+    ? 'Alt ダブルタップで録音開始 / 録音中は Alt 1 回で終了'
+    : 'Control ダブルタップで録音開始 / 録音中は Control 1 回で終了'
+
   const onSave = async (): Promise<void> => {
-    if (!isValidAccelerator(config.hotkey)) {
+    const hotkeyEmpty = !config.hotkey.trim()
+    if (hotkeyEmpty && !config.doubleControl) {
+      setMessage('ホットキーまたはダブルタップのいずれかを有効にしてください')
+      return
+    }
+    if (!hotkeyEmpty && !isValidAccelerator(config.hotkey)) {
       setMessage('ホットキーが無効です（修飾キー＋通常キーの組み合わせが必要）')
       return
     }
@@ -121,7 +131,7 @@ export function SettingsView() {
       const result = await window.api.setConfig({
         language: config.language,
         delay: config.delay,
-        hotkey: config.hotkey,
+        hotkey: config.hotkey.trim(),
         llmCorrection: config.llmCorrection,
         doubleControl: config.doubleControl,
         soundEnabled: config.soundEnabled,
@@ -142,9 +152,10 @@ export function SettingsView() {
   }
 
   const onReset = (): void => {
-    setConfig({ ...DEFAULT_CONFIG })
+    const defaults = getDefaultConfig(window.api.platform)
+    setConfig({ ...defaults })
     setResetPending(true)
-    void refreshMacPermissions(DEFAULT_CONFIG.doubleControl)
+    void refreshMacPermissions(defaults.doubleControl)
     setMessage('初期値に戻しました（未保存）')
   }
 
@@ -220,7 +231,11 @@ export function SettingsView() {
             {recordingKey ? 'キーを押す…' : 'キーを録音'}
           </button>
         </div>
-        <small>Electron アクセラレータ形式（例: CommandOrControl+Shift+R）。直接入力も可</small>
+        <small>
+          {isWin
+            ? '空欄の場合は Alt ダブルタップのみ。accelerator を入力すると globalShortcut も併用できます'
+            : 'Electron アクセラレータ形式（例: CommandOrControl+Shift+R）。直接入力も可'}
+        </small>
       </div>
 
       <label className="field field--row">
@@ -229,7 +244,7 @@ export function SettingsView() {
           checked={config.doubleControl}
           onChange={(e) => update('doubleControl', e.target.checked)}
         />
-        <span>Control ダブルタップで録音開始 / 録音中は Control 1 回で終了</span>
+        <span>{doubleTapLabel}</span>
       </label>
 
       {macPerms && (

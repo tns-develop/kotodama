@@ -1,5 +1,5 @@
 /**
- * Control キー操作を検知してコールバックを呼ぶ。
+ * 修飾キー操作を検知してコールバックを呼ぶ（Windows=Alt、それ以外=Control）。
  * - idle: ダブルタップ（短時間に2回押し）で発火 — 録音開始用
  * - stop: 単押しで発火 — 録音中の終了用
  *
@@ -9,8 +9,10 @@
  */
 
 const DOUBLE_TAP_WINDOW_MS = 400
-// uiohook-napi のキーコード（左右の Control）
+// uiohook-napi のキーコード（左右の Control / Alt）
 const CTRL_KEYCODES = new Set([29, 3613])
+const ALT_KEYCODES = new Set([56, 3640])
+const TARGET_KEYCODES = process.platform === 'win32' ? ALT_KEYCODES : CTRL_KEYCODES
 
 export type CtrlKeyMode = 'idle' | 'stop'
 
@@ -44,7 +46,7 @@ function loadHook(): Uiohook | null {
 }
 
 function onKeyup(e: { keycode: number }): void {
-  if (!CTRL_KEYCODES.has(e.keycode)) return
+  if (!TARGET_KEYCODES.has(e.keycode)) return
   if (mode === 'stop') {
     trigger()
     return
@@ -58,7 +60,7 @@ function onKeyup(e: { keycode: number }): void {
   }
 }
 
-/** Control キー検知モードを切り替える。 */
+/** 修飾キー検知モードを切り替える。 */
 export function setCtrlKeyMode(next: CtrlKeyMode): void {
   mode = next
   lastTapAt = 0
@@ -74,7 +76,7 @@ export function wasUiohookLoadFailed(): boolean {
   return uiohookLoadFailed
 }
 
-/** Control キー検知を開始する。多重起動は無視。 */
+/** 修飾キー検知を開始する。多重起動は無視。 */
 export function startDoubleCtrl(cb: () => void): void {
   trigger = cb
   if (running) return
@@ -96,7 +98,7 @@ export function startDoubleCtrl(cb: () => void): void {
   }
 }
 
-/** Control キー検知を停止する。 */
+/** 修飾キー検知を停止する。 */
 export function stopDoubleCtrl(): void {
   if (!running || !hook) return
   try {

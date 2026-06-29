@@ -33,7 +33,8 @@ export function registerIpcHandlers(): void {
     const hotkeyOk = registerHotkey(merged.hotkey)
     // ホットキー登録失敗時は直前の有効キーへ戻す
     const activeHotkey = getActiveHotkey()
-    if (!hotkeyOk && activeHotkey && merged.hotkey !== activeHotkey) {
+    // activeHotkey が空文字の場合もロールバック先として有効（Windows デフォルト）
+    if (!hotkeyOk && merged.hotkey.trim() !== activeHotkey) {
       merged = saveConfig({ hotkey: activeHotkey })
     }
     applyDoubleControl(merged.doubleControl)

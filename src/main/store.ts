@@ -1,7 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { AppConfig, DEFAULT_CONFIG } from '@shared/ipc'
+import { AppConfig, getDefaultConfig } from '@shared/ipc'
 
 function apiKeyPath(): string {
   return join(app.getPath('userData'), 'apikey.bin')
@@ -35,13 +35,14 @@ export function hasApiKey(): boolean {
 }
 
 export function loadConfig(): AppConfig {
+  const defaults = getDefaultConfig(process.platform)
   const path = configPath()
-  if (!existsSync(path)) return { ...DEFAULT_CONFIG }
+  if (!existsSync(path)) return { ...defaults }
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<AppConfig>
-    return { ...DEFAULT_CONFIG, ...parsed }
+    return { ...defaults, ...parsed }
   } catch {
-    return { ...DEFAULT_CONFIG }
+    return { ...defaults }
   }
 }
 

@@ -7,18 +7,23 @@ let activeHotkey = ''
 
 export function registerHotkey(accelerator: string): boolean {
   globalShortcut.unregisterAll()
+  const trimmed = accelerator.trim()
+  if (!trimmed) {
+    activeHotkey = ''
+    return true
+  }
   try {
-    const ok = globalShortcut.register(accelerator, () => void toggleRecording())
+    const ok = globalShortcut.register(trimmed, () => void toggleRecording())
     if (ok) {
-      activeHotkey = accelerator
+      activeHotkey = trimmed
       return true
     }
-    console.error(`ホットキーの登録に失敗しました: ${accelerator}`)
+    console.error(`ホットキーの登録に失敗しました: ${trimmed}`)
   } catch (err) {
     console.error('ホットキー登録エラー:', err)
   }
   // 失敗時は直前のキーへ復帰し、無反応状態を避ける
-  if (activeHotkey && activeHotkey !== accelerator) {
+  if (activeHotkey && activeHotkey !== trimmed) {
     try {
       globalShortcut.register(activeHotkey, () => void toggleRecording())
     } catch {
