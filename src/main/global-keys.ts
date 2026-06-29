@@ -1,5 +1,5 @@
 /**
- * 修飾キー操作を検知してコールバックを呼ぶ（Windows=Right Ctrl、それ以外=Control 左右）。
+ * 修飾キー操作を検知してコールバックを呼ぶ（Windows=Alt+Ctrl 同時押し、それ以外=Control 左右）。
  * - idle: ダブルタップ（短時間に2回押し）で発火 — 録音開始用
  * - stop: 単押しで発火 — 録音中の終了用
  *
@@ -9,16 +9,18 @@
  */
 
 const DOUBLE_TAP_WINDOW_MS = 400
-// uiohook-napi のキーコード（Control）。Windows は Right Ctrl のみ（左 Ctrl の Ctrl+C/V 等と競合回避）
-const RIGHT_CTRL_KEYCODES = new Set([3613])
+const IS_WIN = process.platform === 'win32'
+
+// uiohook-napi のキーコード
+const ALT_KEYCODES = new Set([56, 3640])
 const CTRL_KEYCODES = new Set([29, 3613])
-const TARGET_KEYCODES = process.platform === 'win32' ? RIGHT_CTRL_KEYCODES : CTRL_KEYCODES
 
 export type CtrlKeyMode = 'idle' | 'stop'
 
+type HookEvent = 'keydown' | 'keyup'
 type Uiohook = {
-  on(event: 'keyup', cb: (e: { keycode: number }) => void): void
-  removeAllListeners(event: 'keyup'): void
+  on(event: HookEvent, cb: (e: { keycode: number }) => void): void
+  removeAllListeners(event?: HookEvent): void
   start(): void
   stop(): void
 }
@@ -29,6 +31,11 @@ let uiohookLoadFailed = false
 let mode: CtrlKeyMode = 'idle'
 let lastTapAt = 0
 let trigger: () => void = () => {}
+
+// Windows: Alt+Ctrl コード用状態
+let altDown = false
+let ctrlDown = false
+let chordEngaged = false
 
 function loadHook(): Uiohook | null {
   if (hook) return hook
@@ -45,8 +52,19 @@ function loadHook(): Uiohook | null {
   }
 }
 
-function onKeyup(e: { keycode: number }): void {
-  if (!TARGET_KEYCODES.has(e.keycode)) return
+function resetWinChordState(): void {
+  altDown = false
+  ctrlDown = false
+  chordEngaged = false
+}
+
+function onWinKeydown(e: { keycode: number }): void {
+  if (ALT_KEYCODES.has(e.keycode)) altDown = true
+  if (CTRL_KEYCODES.has(e.keycode)) ctrlDown = true
+  if (altDown && ctrlDown) chordEngaged = true
+}
+
+function completeWinChordTap(): void {
   if (mode === 'stop') {
     trigger()
     return
@@ -60,10 +78,40 @@ function onKeyup(e: { keycode: number }): void {
   }
 }
 
+function onWinKeyup(e: { keycode: number }): void {
+  if (ALT_KEYCODES.has(e.keycode)) altDown = false
+  if (CTRL_KEYCODES.has(e.keycode)) ctrlDown = false
+  if (!altDown && !ctrlDown && chordEngaged) {
+    chordEngaged = false
+    completeWinChordTap()
+  } else if (!altDown && !ctrlDown) {
+    chordEngaged = false
+  }
+}
+
+function onMacKeyup(e: { keycode: number }): void {
+  if (!CTRL_KEYCODES.has(e.keycode)) return
+  completeWinChordTap()
+}
+
+function removeHookListeners(h: Uiohook): void {
+  try {
+    if (IS_WIN) {
+      h.removeAllListeners('keydown')
+      h.removeAllListeners('keyup')
+    } else {
+      h.removeAllListeners('keyup')
+    }
+  } catch {
+    /* noop */
+  }
+}
+
 /** 修飾キー検知モードを切り替える。 */
 export function setCtrlKeyMode(next: CtrlKeyMode): void {
   mode = next
   lastTapAt = 0
+  if (IS_WIN) resetWinChordState()
 }
 
 /** uiohook が稼働中か。 */
@@ -83,17 +131,18 @@ export function startDoubleCtrl(cb: () => void): void {
   const h = loadHook()
   if (!h) return
   try {
-    h.on('keyup', onKeyup)
+    if (IS_WIN) {
+      h.on('keydown', onWinKeydown)
+      h.on('keyup', onWinKeyup)
+    } else {
+      h.on('keyup', onMacKeyup)
+    }
     h.start()
     running = true
   } catch (err) {
     uiohookLoadFailed = true
     // start 失敗時にリスナーが残ると次回起動で二重登録→二重発火するため除去する
-    try {
-      h.removeAllListeners('keyup')
-    } catch {
-      /* noop */
-    }
+    removeHookListeners(h)
     console.error('[kotodama] uiohook start failed:', err instanceof Error ? err.message : err)
   }
 }
@@ -102,7 +151,7 @@ export function startDoubleCtrl(cb: () => void): void {
 export function stopDoubleCtrl(): void {
   if (!running || !hook) return
   try {
-    hook.removeAllListeners('keyup')
+    removeHookListeners(hook)
     hook.stop()
   } catch (err) {
     console.error('[kotodama] uiohook stop failed:', err instanceof Error ? err.message : err)
@@ -110,4 +159,5 @@ export function stopDoubleCtrl(): void {
   running = false
   mode = 'idle'
   lastTapAt = 0
+  if (IS_WIN) resetWinChordState()
 }

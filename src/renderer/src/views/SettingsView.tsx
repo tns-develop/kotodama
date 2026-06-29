@@ -36,6 +36,7 @@ export function SettingsView() {
   const [keySaved, setKeySaved] = useState(false)
   const [message, setMessage] = useState('')
   const [recordingKey, setRecordingKey] = useState(false)
+  const [recordingHint, setRecordingHint] = useState('')
   const [macPerms, setMacPerms] = useState<MacPermissionStatus | null>(null)
   const [permMessage, setPermMessage] = useState('')
   const [resetPending, setResetPending] = useState(false)
@@ -62,9 +63,14 @@ export function SettingsView() {
 
   // キー録音: capture フェーズでウィンドウ全体の keydown を捕捉
   useEffect(() => {
-    if (!recordingKey) return
+    if (!recordingKey) {
+      setRecordingHint('')
+      return
+    }
+    window.focus()
     const onKey = (e: KeyboardEvent): void => {
       e.preventDefault()
+      if (e.repeat) return
       if (e.key === 'Escape') {
         setRecordingKey(false)
         return
@@ -73,7 +79,9 @@ export function SettingsView() {
       if (accel) {
         setConfig((prev) => (prev ? { ...prev, hotkey: accel } : prev))
         setRecordingKey(false)
+        return
       }
+      setRecordingHint('修飾キー＋通常キーを押してください（例: Ctrl+Shift+R）')
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -117,7 +125,7 @@ export function SettingsView() {
 
   const isWin = window.api.platform === 'win32'
   const doubleTapLabel = isWin
-    ? 'Right Ctrl ダブルタップで録音開始 / 録音中は Right Ctrl 1 回で終了'
+    ? 'Alt+Ctrl を同時に押して離す（400ms 以内に2回で開始 / 録音中は1回で終了）'
     : 'Control ダブルタップで録音開始 / 録音中は Control 1 回で終了'
 
   const onSave = async (): Promise<void> => {
@@ -262,9 +270,10 @@ export function SettingsView() {
         </div>
         <small>
           {isWin
-            ? '空欄の場合は Right Ctrl ダブルタップのみ。accelerator を入力すると globalShortcut も併用できます'
+            ? '空欄の場合は Alt+Ctrl ダブルタップのみ。「キーを録音」は globalShortcut 用（例: Ctrl+Shift+R）'
             : 'Electron アクセラレータ形式（例: CommandOrControl+Shift+R）。直接入力も可'}
         </small>
+        {recordingHint && <small className="recording-hint">{recordingHint}</small>}
       </div>
 
       <label className="field field--row">

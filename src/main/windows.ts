@@ -37,6 +37,7 @@ export function createWorkerWindow(): void {
 
 export function openSettingsWindow(): void {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.setMenu(null)
     settingsWindow.show()
     settingsWindow.focus()
     return
@@ -55,6 +56,8 @@ export function openSettingsWindow(): void {
   settingsWindow.on('closed', () => {
     settingsWindow = null
   })
+  // Windows で Alt がデフォルトメニューを開き、キー録音・入力位置を妨げるのを防ぐ
+  settingsWindow.setMenu(null)
   loadRenderer(settingsWindow, 'settings')
 }
 

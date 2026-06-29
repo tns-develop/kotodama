@@ -47,7 +47,7 @@ export interface AppConfig {
   hotkey: string
   /** completed テキストを LLM で文脈補正するか (gpt-5.4-nano)。既定 false */
   llmCorrection: boolean
-  /** 修飾キー ダブルタップで録音開始・録音中は 1 回で終了するか（Windows=Right Ctrl、他=Control / uiohook） */
+  /** 修飾キー ダブルタップで録音開始・録音中は 1 回で終了するか（Windows=Alt+Ctrl 同時押し、他=Control / uiohook） */
   doubleControl: boolean
   /** 録音開始/終了時に効果音を鳴らすか。既定 true */
   soundEnabled: boolean
