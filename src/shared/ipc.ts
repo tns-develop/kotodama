@@ -22,6 +22,20 @@ export const IPC = {
 
 export type TranscriptionDelay = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 
+/** Node.js process.platform と同値。shared は web/node 両 tsconfig から参照される */
+export type KotodamaPlatform =
+  | 'aix'
+  | 'android'
+  | 'darwin'
+  | 'freebsd'
+  | 'haiku'
+  | 'linux'
+  | 'openbsd'
+  | 'sunos'
+  | 'win32'
+  | 'cygwin'
+  | 'netbsd'
+
 export interface AppConfig {
   /** ストリーミングSTTモデル。差し替え可能にするため設定で保持 */
   model: string
@@ -43,7 +57,7 @@ export interface AppConfig {
   microphoneDeviceId: string
 }
 
-export function getDefaultConfig(platform: NodeJS.Platform): AppConfig {
+export function getDefaultConfig(platform: KotodamaPlatform): AppConfig {
   return {
     model: 'gpt-realtime-whisper',
     language: 'ja',
@@ -103,7 +117,7 @@ export interface MacPermissionStatus {
 export type Unsubscribe = () => void
 
 export interface KotodamaApi {
-  platform: NodeJS.Platform
+  platform: KotodamaPlatform
   onToggle(cb: (active: boolean) => void): Unsubscribe
   onState(cb: (payload: RecordingStatePayload) => void): Unsubscribe
   onDelta(cb: (text: string) => void): Unsubscribe
