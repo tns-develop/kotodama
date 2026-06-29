@@ -125,7 +125,7 @@ export function SettingsView() {
 
   const isWin = window.api.platform === 'win32'
   const doubleTapLabel = isWin
-    ? 'Alt+Ctrl を同時に押して離す（400ms 以内に2回で開始 / 録音中は1回で終了）'
+    ? 'Alt+Ctrl を同時に押して離す（1回で開始 / 録音中も1回で終了）'
     : 'Control ダブルタップで録音開始 / 録音中は Control 1 回で終了'
 
   const onSave = async (): Promise<void> => {
@@ -270,7 +270,7 @@ export function SettingsView() {
         </div>
         <small>
           {isWin
-            ? '空欄の場合は Alt+Ctrl ダブルタップのみ。「キーを録音」は globalShortcut 用（例: Ctrl+Shift+R）'
+            ? '空欄の場合は Alt+Ctrl 1回のみ。「キーを録音」は globalShortcut 用（例: Ctrl+Shift+R）'
             : 'Electron アクセラレータ形式（例: CommandOrControl+Shift+R）。直接入力も可'}
         </small>
         {recordingHint && <small className="recording-hint">{recordingHint}</small>}

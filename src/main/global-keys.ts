@@ -1,7 +1,7 @@
 /**
- * 修飾キー操作を検知してコールバックを呼ぶ（Windows=Alt+Ctrl 同時押し、それ以外=Control 左右）。
- * - idle: ダブルタップ（短時間に2回押し）で発火 — 録音開始用
- * - stop: 単押しで発火 — 録音中の終了用
+ * 修飾キー操作を検知してコールバックを呼ぶ（Windows=Alt+Ctrl 同時押し1回、それ以外=Control ダブルタップ）。
+ * - idle: 録音開始用（Windows=Alt+Ctrl 1回 / 他 OS=Control ダブルタップ）
+ * - stop: 録音中の終了用（Windows=Alt+Ctrl 1回 / 他 OS=Control 1回）
  *
  * Electron の globalShortcut は単独修飾キーを登録できないため、ネイティブの
  * グローバルキーフック(uiohook-napi)で代替する。macOS では「入力監視」権限が必要。
@@ -64,7 +64,19 @@ function onWinKeydown(e: { keycode: number }): void {
   if (altDown && ctrlDown) chordEngaged = true
 }
 
-function completeWinChordTap(): void {
+function onWinKeyup(e: { keycode: number }): void {
+  if (ALT_KEYCODES.has(e.keycode)) altDown = false
+  if (CTRL_KEYCODES.has(e.keycode)) ctrlDown = false
+  if (!altDown && !ctrlDown && chordEngaged) {
+    chordEngaged = false
+    trigger()
+  } else if (!altDown && !ctrlDown) {
+    chordEngaged = false
+  }
+}
+
+function onMacKeyup(e: { keycode: number }): void {
+  if (!CTRL_KEYCODES.has(e.keycode)) return
   if (mode === 'stop') {
     trigger()
     return
@@ -76,22 +88,6 @@ function completeWinChordTap(): void {
   } else {
     lastTapAt = now
   }
-}
-
-function onWinKeyup(e: { keycode: number }): void {
-  if (ALT_KEYCODES.has(e.keycode)) altDown = false
-  if (CTRL_KEYCODES.has(e.keycode)) ctrlDown = false
-  if (!altDown && !ctrlDown && chordEngaged) {
-    chordEngaged = false
-    completeWinChordTap()
-  } else if (!altDown && !ctrlDown) {
-    chordEngaged = false
-  }
-}
-
-function onMacKeyup(e: { keycode: number }): void {
-  if (!CTRL_KEYCODES.has(e.keycode)) return
-  completeWinChordTap()
 }
 
 function removeHookListeners(h: Uiohook): void {
@@ -110,7 +106,7 @@ function removeHookListeners(h: Uiohook): void {
 /** 修飾キー検知モードを切り替える。 */
 export function setCtrlKeyMode(next: CtrlKeyMode): void {
   mode = next
-  lastTapAt = 0
+  if (!IS_WIN) lastTapAt = 0
   if (IS_WIN) resetWinChordState()
 }
 
