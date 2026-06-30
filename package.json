@@ -1,6 +1,6 @@
 {
   "name": "kotodama",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Realtime voice input with gpt-realtime-whisper (TypeScript + Electron)",
   "main": "./out/main/index.js",
   "author": "",
