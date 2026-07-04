@@ -25,10 +25,19 @@ export function WorkerView() {
         startingRef.current = true
         try {
           const cfg = await window.api.getConfig()
-          micRef.current = await startMic(
+          const mic = await startMic(
             (buf) => window.api.sendPcm(buf),
             cfg.microphoneDeviceId || undefined
           )
+          micRef.current = mic
+          if (mic.usedFallback) {
+            // 設定クリア失敗は録音継続を妨げない（次回もフォールバックで動作する）
+            try {
+              await window.api.setConfig({ microphoneDeviceId: '' })
+            } catch (err) {
+              console.warn('無効なマイク設定のクリアに失敗:', err)
+            }
+          }
         } catch (err) {
           const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
           console.error('マイク取得に失敗:', err)

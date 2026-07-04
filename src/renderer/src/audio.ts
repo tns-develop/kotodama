@@ -2,6 +2,39 @@ import workletSource from './pcm-worklet.js?raw'
 
 export interface MicHandle {
   stop: () => void
+  /** 指定 deviceId が使えずシステム既定へフォールバックしたか */
+  usedFallback: boolean
+}
+
+function isDeviceUnavailableError(err: unknown): boolean {
+  if (!(err instanceof DOMException)) return false
+  return err.name === 'OverconstrainedError' || err.name === 'NotFoundError'
+}
+
+async function acquireMicStream(
+  baseAudio: MediaTrackConstraints,
+  deviceId?: string
+): Promise<{ stream: MediaStream; usedFallback: boolean }> {
+  if (!deviceId) {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: baseAudio })
+    return { stream, usedFallback: false }
+  }
+
+  const audioWithDevice: MediaTrackConstraints = {
+    ...baseAudio,
+    deviceId: { exact: deviceId }
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioWithDevice })
+    return { stream, usedFallback: false }
+  } catch (err) {
+    // 保存済み deviceId はビルド違いやデバイス抜き差しで無効化されることがある。
+    // 権限拒否など別原因のエラーはそのまま上位へ伝える。
+    if (!isDeviceUnavailableError(err)) throw err
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: baseAudio })
+    return { stream, usedFallback: true }
+  }
 }
 
 /**
@@ -19,9 +52,8 @@ export async function startMic(
     noiseSuppression: true,
     autoGainControl: true
   }
-  if (deviceId) audio.deviceId = { exact: deviceId }
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio })
+  const { stream, usedFallback } = await acquireMicStream(audio, deviceId)
 
   const ctx = new AudioContext({ sampleRate: 24000 })
   const blob = new Blob([workletSource], { type: 'application/javascript' })
@@ -46,6 +78,7 @@ export async function startMic(
   if (ctx.state === 'suspended') await ctx.resume()
 
   return {
+    usedFallback,
     stop: () => {
       node.port.onmessage = null
       try {
