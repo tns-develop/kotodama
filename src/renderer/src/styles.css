@@ -110,6 +110,7 @@ body {
   align-items: center;
   gap: 12px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .actions button {
@@ -121,6 +122,8 @@ body {
   background: #3b82f6;
   color: #fff;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .actions button:hover {
