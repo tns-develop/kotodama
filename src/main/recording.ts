@@ -3,14 +3,14 @@
  * 状態（recording / currentState / sttSession）をこのモジュールが所有する。
  */
 import { globalShortcut } from 'electron'
-import { IPC, RecordingState, RecordingStatePayload } from '@shared/ipc'
+import { IPC, LongRecordingAction, RecordingState, RecordingStatePayload } from '@shared/ipc'
 import { loadApiKey, loadConfig } from './store'
 import { createSttAdapter, SttSession } from './realtime'
 import { injectText } from './text-injector'
 import { postProcess } from './post-process'
 import { setCtrlKeyMode } from './global-keys'
 import { ensureMicrophoneAccess, guideAccessibilityIfNeeded } from './permissions'
-import { broadcast, hideOverlay, openSettingsWindow, sendToggle, showOverlay } from './windows'
+import { broadcast, closeLongRecordingDialog, hideOverlay, openLongRecordingDialog, openSettingsWindow, sendToggle, showOverlay } from './windows'
 import { updateTray } from './tray'
 
 let sttSession: SttSession | null = null
@@ -18,6 +18,14 @@ let recording = false
 let currentState: RecordingState = 'idle'
 let finalizeTimer: ReturnType<typeof setTimeout> | null = null
 let appendedBytes = 0
+
+// 意図しない長期録音による STT トークン消費を抑える
+const LONG_RECORDING_THRESHOLD_MS = 60_000
+const LONG_RECORDING_DIALOG_TIMEOUT_MS = 20_000
+
+let longRecordingTimer: ReturnType<typeof setTimeout> | null = null
+let longRecordingAutoStopTimer: ReturnType<typeof setTimeout> | null = null
+let longRecordingPromptOpen = false
 
 export function isRecording(): boolean {
   return recording
@@ -46,10 +54,62 @@ export function broadcastCurrentState(): void {
   broadcast(IPC.recordingState, { state: currentState } satisfies RecordingStatePayload)
 }
 
+/** 長時間録音まわりのタイマーとダイアログをリセット */
+function clearLongRecordingTimers(): void {
+  if (longRecordingTimer) {
+    clearTimeout(longRecordingTimer)
+    longRecordingTimer = null
+  }
+  if (longRecordingAutoStopTimer) {
+    clearTimeout(longRecordingAutoStopTimer)
+    longRecordingAutoStopTimer = null
+  }
+  longRecordingPromptOpen = false
+  closeLongRecordingDialog()
+}
+
+/** 閾値（60秒）経過後に確認ダイアログを出すタイマーを開始 */
+function startLongRecordingWatch(): void {
+  clearLongRecordingTimers()
+  longRecordingTimer = setTimeout(() => {
+    longRecordingTimer = null
+    showLongRecordingPrompt()
+  }, LONG_RECORDING_THRESHOLD_MS)
+}
+
+/** 確認ダイアログを表示。無応答なら 20 秒後に自動停止 */
+function showLongRecordingPrompt(): void {
+  if (!recording || longRecordingPromptOpen) return
+  longRecordingPromptOpen = true
+  const expiresAt = Date.now() + LONG_RECORDING_DIALOG_TIMEOUT_MS
+  openLongRecordingDialog(expiresAt)
+  longRecordingAutoStopTimer = setTimeout(() => {
+    longRecordingAutoStopTimer = null
+    handleLongRecordingResponse('stop')
+  }, LONG_RECORDING_DIALOG_TIMEOUT_MS)
+}
+
+/** ダイアログ応答を処理。「続ける」なら監視を再開、「停止」なら録音終了 */
+export function handleLongRecordingResponse(action: LongRecordingAction): void {
+  if (!longRecordingPromptOpen) return
+  longRecordingPromptOpen = false
+  if (longRecordingAutoStopTimer) {
+    clearTimeout(longRecordingAutoStopTimer)
+    longRecordingAutoStopTimer = null
+  }
+  closeLongRecordingDialog()
+  if (action === 'stop') {
+    void stopRecording()
+    return
+  }
+  if (recording) startLongRecordingWatch()
+}
+
 /**
  * セッション後始末。全経路がここを通り recording 固着を防ぐ。
  */
 function teardownSession(finalState: RecordingState, message?: string): void {
+  clearLongRecordingTimers()
   globalShortcut.unregister('Escape')
   if (finalizeTimer) {
     clearTimeout(finalizeTimer)
@@ -104,6 +164,7 @@ async function startRecording(): Promise<void> {
     onOpen: () => {
       setState('recording')
       sendToggle(true)
+      startLongRecordingWatch()
     },
     onDelta: (text) => broadcast(IPC.transcriptDelta, text),
     onCompleted: async (text) => {
@@ -129,6 +190,7 @@ async function startRecording(): Promise<void> {
 
 async function stopRecording(): Promise<void> {
   if (!recording) return
+  clearLongRecordingTimers()
   // recording を先に false にして onClose の二重後始末を防ぐ
   recording = false
   setState('finalizing')

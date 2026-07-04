@@ -344,3 +344,25 @@ body {
     transform: scale(0.82);
   }
 }
+
+/* 長期録音確認ダイアログ */
+.long-recording-dialog {
+  padding: 20px 24px;
+}
+
+.long-recording-dialog__message {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.long-recording-dialog__countdown {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #888;
+}
+
+.long-recording-dialog__actions {
+  justify-content: flex-end;
+  margin-top: 0;
+}

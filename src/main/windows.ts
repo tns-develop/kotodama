@@ -10,6 +10,7 @@ const RENDERER_DEV_URL = process.env['ELECTRON_RENDERER_URL']
 let workerWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
+let longRecordingDialogWindow: BrowserWindow | null = null
 
 function loadRenderer(win: BrowserWindow, hash = ''): void {
   if (RENDERER_DEV_URL) {
@@ -110,6 +111,37 @@ export function showOverlay(): void {
 
 export function hideOverlay(): void {
   if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.hide()
+}
+
+/** 1分以上の録音確認ダイアログを表示する。 */
+export function openLongRecordingDialog(expiresAt: number): void {
+  if (longRecordingDialogWindow && !longRecordingDialogWindow.isDestroyed()) {
+    longRecordingDialogWindow.close()
+  }
+  longRecordingDialogWindow = new BrowserWindow({
+    width: 420,
+    height: 160,
+    resizable: false,
+    alwaysOnTop: true,
+    title: 'Kotodama',
+    webPreferences: {
+      preload: preloadPath(),
+      sandbox: false,
+      contextIsolation: true
+    }
+  })
+  longRecordingDialogWindow.setMenu(null)
+  longRecordingDialogWindow.on('closed', () => {
+    longRecordingDialogWindow = null
+  })
+  loadRenderer(longRecordingDialogWindow, `long-recording?expiresAt=${expiresAt}`)
+}
+
+export function closeLongRecordingDialog(): void {
+  if (longRecordingDialogWindow && !longRecordingDialogWindow.isDestroyed()) {
+    longRecordingDialogWindow.close()
+  }
+  longRecordingDialogWindow = null
 }
 
 /** 全ウィンドウへ同一チャンネルで送信する。 */

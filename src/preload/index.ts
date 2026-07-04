@@ -3,6 +3,7 @@ import {
   AppConfig,
   IPC,
   KotodamaApi,
+  LongRecordingAction,
   MacPermissionStatus,
   RecordingStatePayload,
   SetConfigResult,
@@ -40,7 +41,9 @@ const api: KotodamaApi = {
   openMacPrivacyPane: (kind) =>
     ipcRenderer.invoke(IPC.permissionsOpenPane, kind) as Promise<void>,
   copyMacAppPath: () => ipcRenderer.invoke(IPC.permissionsCopyAppPath) as Promise<boolean>,
-  requestMicAccess: () => ipcRenderer.invoke(IPC.permissionsRequestMic) as Promise<boolean>
+  requestMicAccess: () => ipcRenderer.invoke(IPC.permissionsRequestMic) as Promise<boolean>,
+  respondLongRecording: (action: LongRecordingAction) =>
+    ipcRenderer.send(IPC.longRecordingResponse, action)
 }
 
 contextBridge.exposeInMainWorld('api', api)

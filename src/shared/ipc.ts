@@ -13,6 +13,7 @@ export const IPC = {
   permissionsOpenPane: 'permissions:openPane',
   permissionsCopyAppPath: 'permissions:copyAppPath',
   permissionsRequestMic: 'permissions:requestMic',
+  longRecordingResponse: 'longRecording:response',
   // main -> renderer
   recordingToggle: 'recording:toggle',
   recordingState: 'recording:state',
@@ -91,6 +92,9 @@ export interface ToggleRecordingPayload {
   active: boolean
 }
 
+/** 長期録音確認ダイアログから main への応答 */
+export type LongRecordingAction = 'continue' | 'stop'
+
 export type MacPermissionKind = 'microphone' | 'accessibility' | 'inputMonitoring'
 
 export type MacPermissionState =
@@ -136,4 +140,5 @@ export interface KotodamaApi {
   openMacPrivacyPane(kind: MacPermissionKind): Promise<void>
   copyMacAppPath(): Promise<boolean>
   requestMicAccess(): Promise<boolean>
+  respondLongRecording(action: LongRecordingAction): void
 }
