@@ -69,15 +69,17 @@ git clone git@github.com:<YOUR_ORG>/kotodama.git
 
 ## 1. リアルタイム音声モデル（OpenAI Realtime API、2026年5月発表）
 
-OpenAI が 2026年5月に Realtime API へ投入した3モデル。2026年6月時点でもストリーミング STT の本命は **`gpt-realtime-whisper`** のまま（後継モデルは未発表）。音声入力ツールは「録音し終えてから文字起こし」ではなく「話しながら逐次テキスト化」へ作り替えられる。
+OpenAI が 2026年5月に Realtime API へ投入したモデル群。**2026年7月時点でもストリーミング STT の本命は `gpt-realtime-whisper` のまま**。2026年7月に出た `gpt-realtime-2.1` / `gpt-realtime-2.1-mini` は speech-to-speech 音声エージェント向けで、現行の transcription パイプライン（`intent=transcription`）の差し替え対象ではない。音声入力ツールは「録音し終えてから文字起こし」ではなく「話しながら逐次テキスト化」へ作り替えられる。
 
 | モデル | 役割 | 価格 | 自作音声入力での使いどころ |
 | --- | --- | --- | --- |
 | **gpt-realtime-whisper** | ストリーミングSTT | $0.017/分 | **本命**。話しながら逐次入力。遅延と精度を設定でトレードオフ |
 | **gpt-realtime-translate** | ライブ翻訳（入力70言語超→出力13言語） | $0.034/分 | 日本語で話して英語入力など、入力時翻訳 |
-| **gpt-realtime-2** | 推論つき音声エージェント（コンテキスト128K） | $32 / 1M入力トークン, $64 / 1M出力トークン | 「声で操作(voice-to-action)」等の発展 |
+| **gpt-realtime-2** | 推論つき音声エージェント（旧世代） | $32 / 1M入力トークン, $64 / 1M出力トークン | 発展用の旧候補。新規は 2.1 系を参照 |
+| **gpt-realtime-2.1** | 推論つき音声エージェント（2026-07） | $32 / 1M音声入力, $64 / 1M音声出力 | 将来の voice-to-action 候補（精度重視）。STT 本線には使わない |
+| **gpt-realtime-2.1-mini** | 軽量推論つき音声エージェント（2026-07） | $10 / 1M音声入力, $20 / 1M音声出力 | 将来の voice-to-action 候補（コスト重視）。STT 本線には使わない |
 
-V3 の知見の通り、まずは **gpt-realtime-whisper による文字起こしの質と速度** に集中するのが正解。translate / realtime-2 はモデル/セッション種別を差し替えれば後から足せる。
+V3 の知見の通り、まずは **gpt-realtime-whisper による文字起こしの質と速度** に集中するのが正解。translate / 2.1 系はモデル/セッション種別を差し替えれば後から足せる（会話 Realtime は料金・イベントが transcription と非互換）。
 
 ---
 
@@ -341,7 +343,7 @@ export function connectRealtime(apiKey: string, opts: {
 ```
 
 > **APIキーの扱いに注意**：renderer に生のキーを置くと露出リスクがある。堅くするなら **main プロセスで `ws`(Nodeの WebSocket) を使い、Authorization ヘッダで接続**し、PCM/テキストを IPC で受け渡す構成にする。個人利用ならクライアント接続方式でも可。イベント名・接続方式・ヘッダ仕様は更新され得るので**最新の公式 Realtime ガイドで要確認**。
-> 翻訳入力にしたいなら `gpt-realtime-translate`、声で操作したいなら `gpt-realtime-2` にモデル/セッション種別を差し替える。
+> 翻訳入力にしたいなら `gpt-realtime-translate`、声で操作したいなら `gpt-realtime-2.1`（コスト重視なら `gpt-realtime-2.1-mini`）にモデル/セッション種別を差し替える。STT 本線の `gpt-realtime-whisper` とは別系統。
 
 ### Step 5. renderer：トグルで配線
 
@@ -452,7 +454,7 @@ npx electron-builder --win    # .exe (NSIS)
 
 - **delta による逐次プレビュー**：部分テキストを浮遊ピルに薄字表示 → 確定で本入力。体感が大きく向上。
 - **ライブ翻訳入力**：`gpt-realtime-translate` に切り替え、日本語で話して英語を入力。
-- **声でアプリ操作(voice-to-action)**：`gpt-realtime-2` ＋ツール呼び出し/MCP で、文字起こしを「コマンド」として扱う（V2 が挑んだ方向）。ただし V3 の知見どおり、**まずは文字起こしの質と速度を最優先**。
+- **声でアプリ操作(voice-to-action)**：`gpt-realtime-2.1`（コスト重視なら `gpt-realtime-2.1-mini`）＋ツール呼び出し/MCP で、文字起こしを「コマンド」として扱う（V2 が挑んだ方向）。STT 本線は `gpt-realtime-whisper` のまま残し、会話 Realtime は別アダプタとして足す。ただし V3 の知見どおり、**まずは文字起こしの質と速度を最優先**。
 - **後処理にLLM**：句読点付け・フィラー除去・固有名詞補正。カスタム語彙（辞書）も有効。
 - **push-to-talk**：トグルではなく「押している間だけ録音」。`globalShortcut` は押しっぱなし検知が苦手なため、必要なら低レベルのキーフック（`uIOhook` 等）を検討。
 
@@ -462,9 +464,12 @@ npx electron-builder --win    # .exe (NSIS)
 
 - DXマガジン記事: https://dxmagazine.jp/news/2617ko66/
 - OpenAI「Advancing voice intelligence with new models in the API」: https://openai.com/index/advancing-voice-intelligence-with-new-models-in-the-api/
+- OpenAI Developer Community「gpt-realtime-2.1 / 2.1-mini」(2026-07): https://community.openai.com/t/new-realtime-models-on-the-api-gpt-realtime-2-1-and-gpt-realtime-2-1-mini/1385896
+- 財経新聞「gpt-realtime-2.1」解説: https://www.zaikei.co.jp/amp/article/20260709/860520.html
 - OpenAI Realtime transcription ガイド: https://developers.openai.com/api/docs/guides/realtime-transcription
 - OpenAI Realtime API（WebSocket）: https://developers.openai.com/api/docs/guides/realtime-websocket
 - gpt-realtime-whisper モデル: https://developers.openai.com/api/docs/models/gpt-realtime-whisper
+- gpt-realtime-2.1 モデル: https://developers.openai.com/api/docs/models/gpt-realtime-2.1
 - Qiita / hmkc1220 記事一覧: https://qiita.com/hmkc1220
 - Open Super Whisper（V1〜V2 / Python実装の参考）: https://github.com/TakanariShimbo/open-super-whisper
 - Electron: https://www.electronjs.org/docs/latest / globalShortcut / safeStorage / electron-builder / nut.js 各公式ドキュメント

@@ -14,6 +14,8 @@
 | **STT モデル** | OpenAI Realtime API `gpt-realtime-whisper`（$0.017/分、Tier 1 以上必須） |
 | **現状** | **MVP 動作確認済み**（macOS、開発モード `npm run dev`）。音声入力→文字起こし→貼り付けまで到達 |
 
+**2026-07 メモ**: OpenAI が `gpt-realtime-2.1` / `gpt-realtime-2.1-mini`（speech-to-speech 音声エージェント）を発表したが、kotodama の transcription 経路（`intent=transcription` + `gpt-realtime-whisper`）は変更なし。2.1 系は将来の voice-to-action 候補であり、現行 STT 本線の差し替え対象ではない。詳細は [rule.md](./rule.md) §1。
+
 **最新コミット（執筆時点）**: `219ed86` — 「とりあえず音声入力できるところまで進んだので一旦コミット」
 
 ---
@@ -288,3 +290,5 @@ const REALTIME_URL = 'wss://api.openai.com/v1/realtime?intent=transcription'
 - [Realtime transcription](https://developers.openai.com/api/docs/guides/realtime-transcription)
 - [Realtime and audio（Beta→GA migration）](https://developers.openai.com/api/docs/guides/realtime)
 - [gpt-realtime-whisper](https://developers.openai.com/api/docs/models/gpt-realtime-whisper)
+- [gpt-realtime-2.1](https://developers.openai.com/api/docs/models/gpt-realtime-2.1)（音声エージェント用。STT 本線には使わない）
+- [Community: gpt-realtime-2.1 / 2.1-mini](https://community.openai.com/t/new-realtime-models-on-the-api-gpt-realtime-2-1-and-gpt-realtime-2-1-mini/1385896)
