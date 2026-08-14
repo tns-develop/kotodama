@@ -14,7 +14,7 @@ function remainingSeconds(expiresAt: number): number {
   return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
 }
 
-/** 1分以上の録音継続確認。無応答時は main 側タイマーと合わせて stop を送る。 */
+/** 閾値経過後の録音継続確認。無応答時は main 側タイマーと合わせて stop を送る。 */
 export function LongRecordingDialogView() {
   const expiresAt = parseExpiresAt()
   const [secondsLeft, setSecondsLeft] = useState(() => remainingSeconds(expiresAt))
@@ -39,7 +39,7 @@ export function LongRecordingDialogView() {
 
   return (
     <div className="long-recording-dialog">
-      <p className="long-recording-dialog__message">1分以上録音しています。続けますか？</p>
+      <p className="long-recording-dialog__message">2分以上録音しています。続けますか？</p>
       <p className="long-recording-dialog__countdown">{secondsLeft}秒後に自動停止します</p>
       <div className="actions long-recording-dialog__actions">
         <button type="button" className="secondary" onClick={() => respond('continue')}>

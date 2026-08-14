@@ -113,7 +113,7 @@ export function hideOverlay(): void {
   if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.hide()
 }
 
-/** 1分以上の録音確認ダイアログを表示する。 */
+/** 閾値経過後に録音確認ダイアログを表示する。 */
 export function openLongRecordingDialog(expiresAt: number): void {
   if (longRecordingDialogWindow && !longRecordingDialogWindow.isDestroyed()) {
     longRecordingDialogWindow.close()

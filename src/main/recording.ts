@@ -20,7 +20,7 @@ let finalizeTimer: ReturnType<typeof setTimeout> | null = null
 let appendedBytes = 0
 
 // 意図しない長期録音による STT トークン消費を抑える
-const LONG_RECORDING_THRESHOLD_MS = 60_000
+const LONG_RECORDING_THRESHOLD_MS = 120_000
 const LONG_RECORDING_DIALOG_TIMEOUT_MS = 20_000
 
 let longRecordingTimer: ReturnType<typeof setTimeout> | null = null
@@ -68,7 +68,7 @@ function clearLongRecordingTimers(): void {
   closeLongRecordingDialog()
 }
 
-/** 閾値（60秒）経過後に確認ダイアログを出すタイマーを開始 */
+/** 閾値経過後に確認ダイアログを出すタイマーを開始 */
 function startLongRecordingWatch(): void {
   clearLongRecordingTimers()
   longRecordingTimer = setTimeout(() => {
