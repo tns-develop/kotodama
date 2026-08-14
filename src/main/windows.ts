@@ -38,6 +38,7 @@ export function createWorkerWindow(): void {
 
 export function openSettingsWindow(): void {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
+    if (settingsWindow.isMinimized()) settingsWindow.restore()
     settingsWindow.setMenu(null)
     settingsWindow.show()
     settingsWindow.focus()

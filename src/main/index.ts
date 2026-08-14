@@ -17,43 +17,53 @@ process.on('unhandledRejection', (reason) => console.error('[kotodama] unhandled
 
 app.setName('Kotodama')
 
-app.whenReady().then(() => {
-  // マイクのみ許可
-  electronSession.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-    callback(permission === 'media')
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!app.isReady()) return
+    openSettingsWindow()
   })
 
-  if (process.platform === 'darwin') app.dock?.hide()
+  app.whenReady().then(() => {
+    // マイクのみ許可
+    electronSession.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+      callback(permission === 'media')
+    })
 
-  createWorkerWindow()
+    if (process.platform === 'darwin') app.dock?.hide()
 
-  initTray(
-    {
-      toggleRecording: () => void toggleRecording(),
-      openSettings: () => openSettingsWindow(),
-      quit: () => app.quit()
-    },
-    getCurrentState(),
-    isRecording()
-  )
+    createWorkerWindow()
 
-  registerIpcHandlers()
-  const config = loadConfig()
-  registerHotkey(config.hotkey)
-  applyDoubleControl(config.doubleControl)
-  clearInputMonitoringDismissIfResolved(config.doubleControl)
-  if (config.doubleControl) void guideInputMonitoringIfNeeded()
-  console.log(
-    `[kotodama] ready: tray & worker window initialized. hotkey=${config.hotkey}, apiKey=${hasApiKey() ? 'set' : 'unset'}`
-  )
-})
+    initTray(
+      {
+        toggleRecording: () => void toggleRecording(),
+        openSettings: () => openSettingsWindow(),
+        quit: () => app.quit()
+      },
+      getCurrentState(),
+      isRecording()
+    )
 
-app.on('window-all-closed', () => {
-  // トレイ常駐アプリのため、ウィンドウが閉じても終了しない
-})
+    registerIpcHandlers()
+    const config = loadConfig()
+    registerHotkey(config.hotkey)
+    applyDoubleControl(config.doubleControl)
+    clearInputMonitoringDismissIfResolved(config.doubleControl)
+    if (config.doubleControl) void guideInputMonitoringIfNeeded()
+    console.log(
+      `[kotodama] ready: tray & worker window initialized. hotkey=${config.hotkey}, apiKey=${hasApiKey() ? 'set' : 'unset'}`
+    )
+  })
 
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
-  stopDoubleCtrl()
-  closeSession()
-})
+  app.on('window-all-closed', () => {
+    // トレイ常駐アプリのため、ウィンドウが閉じても終了しない
+  })
+
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
+    stopDoubleCtrl()
+    closeSession()
+  })
+}
