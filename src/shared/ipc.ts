@@ -56,6 +56,8 @@ export interface AppConfig {
   inputMonitoringGuideDismissed: boolean
   /** 使用するマイクの deviceId。空文字なら OS 既定 */
   microphoneDeviceId: string
+  /** 録音開始時に選択テキストを検出し、音声指示で書き換えるか (gpt-5.4-nano)。既定 true */
+  voiceEditEnabled: boolean
 }
 
 export function getDefaultConfig(platform: KotodamaPlatform): AppConfig {
@@ -68,7 +70,8 @@ export function getDefaultConfig(platform: KotodamaPlatform): AppConfig {
     doubleControl: true,
     soundEnabled: true,
     inputMonitoringGuideDismissed: false,
-    microphoneDeviceId: ''
+    microphoneDeviceId: '',
+    voiceEditEnabled: true
   }
 }
 
@@ -83,9 +86,15 @@ export interface SetConfigResult {
 
 export type RecordingState = 'idle' | 'connecting' | 'recording' | 'finalizing' | 'error'
 
+/** 録音セッションの用途。dictate=カーソル位置へ挿入 / edit=選択範囲を音声指示で書き換え */
+export type RecordingMode = 'dictate' | 'edit'
+
 export interface RecordingStatePayload {
   state: RecordingState
   message?: string
+  mode?: RecordingMode
+  /** 編集モード時、書き換え対象の選択テキスト先頭（オーバーレイ表示用） */
+  selectionPreview?: string
 }
 
 export interface ToggleRecordingPayload {

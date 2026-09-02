@@ -8,6 +8,8 @@ import { loadApiKey, loadConfig } from './store'
 import { createSttAdapter, SttSession } from './realtime'
 import { injectText } from './text-injector'
 import { postProcess } from './post-process'
+import { captureSelectionIfAny } from './selection'
+import { applyVoiceEdit } from './voice-edit'
 import { setCtrlKeyMode } from './global-keys'
 import { ensureMicrophoneAccess, guideAccessibilityIfNeeded } from './permissions'
 import { broadcast, closeLongRecordingDialog, hideOverlay, openLongRecordingDialog, openSettingsWindow, sendToggle, showOverlay } from './windows'
@@ -18,6 +20,13 @@ let recording = false
 let currentState: RecordingState = 'idle'
 let finalizeTimer: ReturnType<typeof setTimeout> | null = null
 let appendedBytes = 0
+/** 非 null なら音声編集モード。書き換え対象の選択テキストを保持する */
+let editOriginalText: string | null = null
+/** startRecording の前処理中フラグ。選択検出の待ち時間中の多重起動を防ぐ */
+let starting = false
+
+/** オーバーレイに出す選択テキストの表示上限 */
+const SELECTION_PREVIEW_LENGTH = 24
 
 // 意図しない長期録音による STT トークン消費を抑える
 const LONG_RECORDING_THRESHOLD_MS = 120_000
@@ -42,16 +51,42 @@ export function appendAudio(chunk: ArrayBuffer): void {
   sttSession.appendAudio(chunk)
 }
 
+/** 選択テキストを1行に畳んで先頭だけ返す（オーバーレイのチップ表示用）。 */
+function buildSelectionPreview(): string | undefined {
+  if (!editOriginalText) return undefined
+  const flat = editOriginalText.replace(/\s+/g, ' ').trim()
+  if (!flat) return undefined
+  return flat.length > SELECTION_PREVIEW_LENGTH
+    ? `${flat.slice(0, SELECTION_PREVIEW_LENGTH)}…`
+    : flat
+}
+
+function buildStatePayload(state: RecordingState, message?: string): RecordingStatePayload {
+  return {
+    state,
+    message,
+    mode: editOriginalText ? 'edit' : 'dictate',
+    selectionPreview: buildSelectionPreview()
+  }
+}
+
 function setState(state: RecordingState, message?: string): void {
   currentState = state
-  const payload: RecordingStatePayload = { state, message }
-  broadcast(IPC.recordingState, payload)
+  broadcast(IPC.recordingState, buildStatePayload(state, message))
   updateTray(currentState, recording)
 }
 
 /** rendererReady 時に現在状態を再送する。 */
 export function broadcastCurrentState(): void {
-  broadcast(IPC.recordingState, { state: currentState } satisfies RecordingStatePayload)
+  broadcast(IPC.recordingState, buildStatePayload(currentState))
+}
+
+/** completed 待ちの保険タイマーを止める */
+function clearFinalizeTimer(): void {
+  if (finalizeTimer) {
+    clearTimeout(finalizeTimer)
+    finalizeTimer = null
+  }
 }
 
 /** 長時間録音まわりのタイマーとダイアログをリセット */
@@ -111,10 +146,7 @@ export function handleLongRecordingResponse(action: LongRecordingAction): void {
 function teardownSession(finalState: RecordingState, message?: string): void {
   clearLongRecordingTimers()
   globalShortcut.unregister('Escape')
-  if (finalizeTimer) {
-    clearTimeout(finalizeTimer)
-    finalizeTimer = null
-  }
+  clearFinalizeTimer()
   recording = false
   sttSession?.close()
   sttSession = null
@@ -129,11 +161,19 @@ function teardownSession(finalState: RecordingState, message?: string): void {
     hideOverlay()
   }
   setCtrlKeyMode('idle')
+  // 次のセッションへ持ち越さないようクリアする（上の setState より後なので、
+  // このセッションの最終状態は編集モードのまま renderer へ届く）
+  editOriginalText = null
 }
 
 async function startRecording(): Promise<void> {
+  // 選択検出の待ち時間中は recording が false のままなので、多重起動をここで弾く
+  if (recording || starting) return
+  starting = true
+
   const apiKey = loadApiKey()
   if (!apiKey) {
+    starting = false
     console.error('[kotodama] session error: APIキーが未設定です')
     setState('error', 'APIキーが未設定です')
     openSettingsWindow()
@@ -142,6 +182,7 @@ async function startRecording(): Promise<void> {
 
   const micGranted = await ensureMicrophoneAccess()
   if (!micGranted) {
+    starting = false
     console.error('[kotodama] session error: マイク権限がありません')
     setState('error', 'マイク権限がありません')
     return
@@ -150,6 +191,14 @@ async function startRecording(): Promise<void> {
   void guideAccessibilityIfNeeded()
 
   const config = loadConfig()
+  // 選択テキストがあれば音声編集モードに入る。await を含むため recording=true より前に
+  // 済ませる（recording=true から adapter.connect までは同期で通す必要がある）
+  editOriginalText = config.voiceEditEnabled ? await captureSelectionIfAny() : null
+  if (editOriginalText) {
+    console.log(`[kotodama] voice edit mode: ${editOriginalText.length} chars selected`)
+  }
+
+  starting = false
   recording = true
   setCtrlKeyMode('stop')
   appendedBytes = 0
@@ -158,6 +207,10 @@ async function startRecording(): Promise<void> {
   setState('connecting')
   showOverlay()
   console.log(`[kotodama] connecting: model=${config.model}, lang=${config.language || 'auto'}, delay=${config.delay}`)
+
+  // teardown で editOriginalText がクリアされても書き換えを完了できるよう、
+  // config/apiKey と同様にこのセッションの値をローカルへ固定する
+  const editOriginal = editOriginalText
 
   const adapter = createSttAdapter(config.model)
   sttSession = adapter.connect(apiKey, config, {
@@ -168,11 +221,24 @@ async function startRecording(): Promise<void> {
     },
     onDelta: (text) => broadcast(IPC.transcriptDelta, text),
     onCompleted: async (text) => {
+      // completed が来た時点で保険タイマーは役目を終える。後処理（LLM は最大 8s）中に
+      // 発火すると、遅れて再開したこの処理が次のセッションを teardown してしまう
+      clearFinalizeTimer()
       broadcast(IPC.transcriptCompleted, text)
       if (text.trim()) {
         try {
-          const finalText = await postProcess(text, config, apiKey)
-          await injectText(finalText)
+          if (editOriginal) {
+            // 失敗時は貼り付けない（選択範囲を壊さない）
+            const edited = await applyVoiceEdit(editOriginal, text, apiKey)
+            if (!edited) {
+              teardownSession('error', 'テキストの編集に失敗しました')
+              return
+            }
+            await injectText(edited)
+          } else {
+            const finalText = await postProcess(text, config, apiKey)
+            await injectText(finalText)
+          }
         } catch (err) {
           teardownSession('error', err instanceof Error ? err.message : '貼り付けに失敗しました')
           return

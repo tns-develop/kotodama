@@ -1,4 +1,5 @@
 import { clipboard } from 'electron'
+import { pressWithModifier } from './keyboard'
 
 /**
  * 確定テキストを「現在フォーカス中のアプリのカーソル位置」へ挿入する。
@@ -13,19 +14,9 @@ import { clipboard } from 'electron'
 export async function injectText(text: string): Promise<void> {
   if (!text) return
 
-  // nut.js はネイティブモジュールのため動的 import（rebuild 前でもアプリ起動は可能にする）
-  const { keyboard, Key } = await import('@nut-tree-fork/nut-js')
-  keyboard.config.autoDelayMs = 0
-
   clipboard.writeText(text)
   // クリップボード反映を待つ
-  await delay(60)
+  await new Promise((resolve) => setTimeout(resolve, 60))
 
-  const modifier = process.platform === 'darwin' ? Key.LeftCmd : Key.LeftControl
-  await keyboard.pressKey(modifier, Key.V)
-  await keyboard.releaseKey(modifier, Key.V)
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  await pressWithModifier('V')
 }

@@ -62,7 +62,9 @@ body {
   font-size: 11px;
 }
 
+/* .field 直下だけでなく、補足 small を添えるため .field の中に入れ子にしても使う */
 .field--row {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 8px;
@@ -264,12 +266,29 @@ body {
   margin: 0;
   background: transparent;
   display: flex;
+  flex-direction: column;
   justify-content: flex-start;
   align-items: flex-start;
+  gap: 5px;
   padding: 4px;
   height: 100vh;
   overflow: hidden;
   -webkit-app-region: no-drag;
+}
+
+/* 音声編集モードで書き換え対象を示すチップ */
+.edit-chip {
+  max-width: 92vw;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.78);
+  color: #cfd3da;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
 }
 
 .pill {

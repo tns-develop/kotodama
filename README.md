@@ -27,6 +27,20 @@ npm run dev       # 開発起動
 2. 話す。録音中は画面下部に浮遊ピルが表示され、`delta` を逐次プレビューする。
 3. もう一度ホットキーで停止。確定テキストがカーソル位置に貼り付けられる。
 
+### 音声編集モード（選択テキストの書き換え）
+
+テキストを選択した状態で録音を開始すると、話した内容が「入力」ではなく「編集指示」として扱われ、選択範囲がその指示どおりに書き換わる。専用のホットキーは無く、通常の録音操作（ホットキー / Control ダブルタップ）を共用する。
+
+1. 任意のアプリでテキストを選択する。
+2. 通常どおり録音を開始する。選択が検出されるとピルの上に「選択中: …」が表示される。
+3. 「箇条書きにして」「英語に翻訳して」「もっと丁寧にして」などと話して録音を停止する。
+4. `gpt-5.4-nano` で書き換えられた本文が貼り付けられ、選択範囲が置き換わる。
+
+- 言い直した文そのものを話した場合は、その内容が新しい本文として採用される。
+- 選択が無い / 6,000文字を超える場合は通常の音声入力にフォールバックする。
+- 書き換えに失敗した場合は貼り付けを行わないため、選択範囲は壊れない。
+- 選択の有無は録音開始時に Cmd/Ctrl+C を送って判定するため、通常の音声入力の開始も僅かに遅くなる。不要なら設定の「テキストを選択してから録音すると…」を OFF にする（既定 ON）。
+
 ## アーキテクチャ（セキュア構成）
 
 - **main (Node.js)**: `globalShortcut` / Tray / OpenAI への WebSocket 接続（`ws` + `Authorization` ヘッダ）/ `clipboard` + nut.js での貼り付け / `safeStorage`。
@@ -35,7 +49,7 @@ npm run dev       # 開発起動
 
 ```
 src/
-├── main/        # index.ts, realtime.ts, text-injector.ts, store.ts, permissions.ts
+├── main/        # index.ts, realtime.ts, text-injector.ts, selection.ts, voice-edit.ts, store.ts, permissions.ts
 ├── preload/     # index.ts (contextBridge)
 ├── renderer/    # index.html, src/{App.tsx, audio.ts, pcm-worklet.js, ...}
 └── shared/      # ipc.ts (チャンネル名・型)

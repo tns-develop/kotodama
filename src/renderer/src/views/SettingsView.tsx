@@ -152,6 +152,7 @@ export function SettingsView() {
         doubleControl: config.doubleControl,
         soundEnabled: config.soundEnabled,
         microphoneDeviceId: config.microphoneDeviceId,
+        voiceEditEnabled: config.voiceEditEnabled,
         ...(resetPending ? { inputMonitoringGuideDismissed: false } : {})
       })
       setResetPending(false)
@@ -250,6 +251,21 @@ export function SettingsView() {
         />
         <span>漢字変換をLLMで文脈補正する（gpt-5.4-nano / 追加課金あり）</span>
       </label>
+
+      <div className="field">
+        <label className="field--row">
+          <input
+            type="checkbox"
+            checked={config.voiceEditEnabled}
+            onChange={(e) => update('voiceEditEnabled', e.target.checked)}
+          />
+          <span>
+            テキストを選択してから録音すると、話した指示でその場を書き換える（音声編集モード /
+            gpt-5.4-nano・追加課金あり）
+          </span>
+        </label>
+        <small>録音開始時に選択の有無を確認するため、通常の音声入力の開始が僅かに遅くなります。</small>
+      </div>
 
       <div className="field">
         <span>録音トグルのホットキー</span>

@@ -62,9 +62,14 @@ globalShortcut (main)
 ```
 src/
 ├── main/
-│   ├── index.ts          # Tray, globalShortcut, 録音制御, IPC, teardownSession
+│   ├── index.ts          # Tray, globalShortcut, IPC 配線
+│   ├── recording.ts      # 録音ライフサイクル (startRecording / stopRecording / teardownSession)
 │   ├── realtime.ts       # GptRealtimeWhisperAdapter (SttAdapter IF)
-│   ├── text-injector.ts  # clipboard + @nut-tree-fork/nut-js
+│   ├── text-injector.ts  # clipboard + Cmd/Ctrl+V で貼り付け
+│   ├── keyboard.ts       # nut.js キー送出の共通化 (text-injector / selection)
+│   ├── selection.ts      # 選択テキスト検出（音声編集モード判定）
+│   ├── voice-edit.ts     # 選択テキストの書き換え (gpt-5.4-nano)
+│   ├── chat.ts           # Chat Completions 共通呼び出し (post-process / voice-edit)
 │   ├── store.ts          # safeStorage (APIキー), config.json
 │   └── permissions.ts    # マイク / アクセシビリティ案内
 ├── preload/index.ts      # contextBridge → window.api
@@ -175,6 +180,7 @@ npm run dev
 - [x] text-injector（clipboard + nut.js、OS 分岐）
 - [x] macOS 権限案内（マイク・アクセシビリティ）
 - [x] 浮遊ピル overlay（delta 逐次プレビュー、エラー文言）
+- [x] 音声編集モード（選択テキストを音声指示で書き換え / `selection.ts` + `voice-edit.ts`）
 - [x] teardownSession（エラー/切断時の後始末統一）
 - [x] electron-builder.yml（mac entitlements、NSMicrophoneUsageDescription）
 - [ ] **配布ビルドの実機検証**（署名・公証・アイコンはプレースホルダ）— **macOS 実機 E2E 確認済**（2026-06-22）。Windows は [dist-verification-plan.md](./dist-verification-plan.md) フェーズ 2 待ち
@@ -205,6 +211,28 @@ npm run dev
 | **録音中 ESC で中断** | `startRecording` で `globalShortcut.register('Escape', cancelRecording)`、`teardownSession` 冒頭で `unregister('Escape')`。`cancelRecording()` は `commit` を呼ばず `teardownSession('idle')`＝貼り付けなしの中断（best-effort 登録） |
 | **起動/終了 効果音** | `WorkerView` の `onState` で前回 state を ref 保持し、`recording` 遷移で開始音 / 正常完了(`recording`\|`finalizing`→`idle`)で終了音を `playSE()` 再生。鳴らす直前に `getConfig()` で `soundEnabled`（既定 true）確認。音源は `src/renderer/public/sounds/{start,stop}.mp3`（ユーザー配置、未配置は無音）。エラー終了時は鳴らさない |
 | **トレイアイコン差し替え** | `createTrayIcon()` が `resources/trayTemplate.png`(+@2x) を `nativeImage.createFromPath`＋`setTemplateImage(true)` で読込、空なら `createFallbackTrayIcon()`（従来の黒丸）。`electron-builder.yml` に `extraResources` で `resources/` 同梱。仕様は `resources/README.md` と `README.md` に記載 |
+
+### 音声編集モード（2026-09-02 実装済み）
+
+選択テキストを音声指示で書き換える機能（アクアボイスの Edit Mode 相当）。**専用ホットキーは追加せず**、既存の録音トリガー（`config.hotkey` / Control ダブルタップ）を共用し、録音開始時の選択有無で自動的にモードを切り替える。
+
+| 項目 | 実装内容 |
+| --- | --- |
+| **選択検出** | 新規 [`src/main/selection.ts`](../src/main/selection.ts) `captureSelectionIfAny()`。`clipboard.clear()` → Cmd/Ctrl+C 送出（[`keyboard.ts`](../src/main/keyboard.ts) `pressWithModifier()` を `text-injector.ts` と共用）→ 100ms 待ち → `clipboard.readText()`。**「コピー前後の差分」ではなくクリア後に何か入ったかで判定**する（選択内容が偶然クリップボードと同一でも検出できる）。選択なし / 6,000文字超 / 例外はすべて `null` を返し、その経路では元のクリップボード内容へ復元する |
+| **書き換え** | 新規 [`src/main/voice-edit.ts`](../src/main/voice-edit.ts) `applyVoiceEdit(original, instruction, apiKey)`。モデルは表記補正と同じ `gpt-5.4-nano`、タイムアウトは翻訳・構造変換を見込んで 8s。指示が「言い直し」の場合は指示内容そのものを新本文として採用するようシステムプロンプトで分岐 |
+| **Chat Completions の共通化** | 新規 [`src/main/chat.ts`](../src/main/chat.ts) `requestChatCompletion()`（fetch + `AbortController` タイムアウト + 失敗時 `null`）。`post-process.ts` の表記補正と `voice-edit.ts` の書き換えが共用し、モデル/プロンプト/タイムアウトだけを各呼び出し側が持つ。ログの判別用に `label` を渡す |
+| **録音側の統合** | [`recording.ts`](../src/main/recording.ts) に `editOriginalText`（非 null＝編集モード）を追加。`onCompleted` で `editOriginalText` があれば `applyVoiceEdit` → `injectText`、なければ従来の `postProcess` → `injectText`。**書き換え失敗時は貼り付けを行わずエラー表示のみ**（選択範囲を壊さない）。`teardownSession` の末尾（`setState` より後）でクリアし、`finalizing`/`error` 表示までは編集モードのラベルを維持する |
+| **置換の仕組み** | Cmd+C は選択状態を変えないため、`injectText` の Cmd/Ctrl+V がそのまま選択範囲の置換になる（OS 標準のペースト挙動）。専用の削除処理は不要 |
+| **設定** | `AppConfig.voiceEditEnabled`（既定 `true`）。`loadConfig()` が既定値とマージするため既存 `config.json` の移行処理は不要。設定 UI は `SettingsView.tsx` のチェックボックス（補足 `small` を添えるため `.field` の中に `.field--row` を入れ子にしている。`.field--row` に `display:flex` を追加済み） |
+| **オーバーレイ** | `RecordingStatePayload` に `mode` / `selectionPreview` を追加。編集モードでは `recording`→「編集内容を聞き取り中」、`finalizing`→「編集を反映中…」。ピルの上に `.edit-chip`（選択中: …、先頭 24 文字）を表示 |
+
+**ハマり所（この機能特有）**
+
+- **`await` の置き場所**: `recording = true` から `sttSession = adapter.connect(...)` までは**同期で通す**必要がある（間に `await` を挟むと、待っている間に `stopRecording()` が走った場合に後から `sttSession` が復活してセッションが孤立する）。そのため `captureSelectionIfAny()` は `loadConfig()` の直後・`recording = true` の**前**に置いている。
+- **多重起動**: 上記の配置により `recording` が `false` のまま 100ms 強待つ区間ができ、その間にホットキー/ダブルタップが再発火すると `startRecording()` が多重に走る。`starting` フラグ（冒頭で `if (recording || starting) return`、早期 return の各分岐で `false` に戻す）で防いでいる。
+- **保険タイマーとの競合**: `stopRecording()` が張る「completed が来ない場合の 8s タイムアウト」と書き換えの LLM タイムアウト（8s）が重なると、後処理中に `teardownSession()` が走り、遅れて完了した処理が**次に開始したセッションを終了させてしまう**。`onCompleted` の冒頭で `clearFinalizeTimer()` して保険を解除している。
+- **アクセシビリティ権限**: 未許可だと Cmd+C が無反応になり、常に「選択なし」＝通常ディクテーションにフォールバックする（機能が効かないだけで既存動作は壊れない）。
+- 全ての録音開始で 1 回コピーが走るため**通常の音声入力も僅かに遅くなる**。気になる場合は設定で OFF にできる。
 
 ### UX
 
@@ -278,7 +306,8 @@ const REALTIME_URL = 'wss://api.openai.com/v1/realtime?intent=transcription'
 5. [README.md](../README.md) — コマンド一覧
 6. 変更時の触りどころ:
    - 接続/STT → `src/main/realtime.ts`
-   - 録音ライフサイクル → `src/main/index.ts`（`startRecording` / `stopRecording` / `teardownSession`）
+   - 録音ライフサイクル → `src/main/recording.ts`（`startRecording` / `stopRecording` / `teardownSession`）
+   - 音声編集モード → `src/main/selection.ts`（選択検出）, `src/main/voice-edit.ts`（書き換え）, `recording.ts` の `editOriginalText` 分岐
    - 音声 → `src/renderer/src/audio.ts`, `pcm-worklet.js`
    - UI → `src/renderer/src/App.tsx`
    - IPC/型 → `src/shared/ipc.ts`
