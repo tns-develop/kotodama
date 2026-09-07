@@ -3,8 +3,6 @@
  */
 import { requestChatCompletion } from './chat'
 
-/** 表記補正と同じ最安クラスのモデルを使う。 */
-const VOICE_EDIT_MODEL = 'gpt-5.4-nano'
 /** 翻訳・構造変換は表記補正より生成量が多いため長めに取る */
 const VOICE_EDIT_TIMEOUT_MS = 8000
 
@@ -27,10 +25,11 @@ const SYSTEM_PROMPT = `あなたは「選択されたテキスト」を「音声
 export async function applyVoiceEdit(
   original: string,
   instruction: string,
-  apiKey: string
+  apiKey: string,
+  model: string
 ): Promise<string | null> {
   return requestChatCompletion({
-    model: VOICE_EDIT_MODEL,
+    model,
     systemPrompt: SYSTEM_PROMPT,
     userContent: `【元のテキスト】\n${original}\n\n【音声指示】\n${instruction}`,
     apiKey,

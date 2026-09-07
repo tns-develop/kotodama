@@ -1,5 +1,6 @@
 import WebSocket from 'ws'
 import { AppConfig } from '@shared/ipc'
+import { sttLanguageFields } from '@shared/models'
 
 export interface SttCallbacks {
   onDelta: (text: string) => void
@@ -31,7 +32,7 @@ export interface SttAdapter {
 const REALTIME_URL = 'wss://api.openai.com/v1/realtime?intent=transcription'
 
 /**
- * OpenAI Realtime API の gpt-realtime-whisper を使ったストリーミング文字起こし。
+ * OpenAI Realtime API のストリーミング文字起こし。
  * セキュア構成: main プロセスで ws を張り、Authorization ヘッダで接続する。
  */
 export class GptRealtimeWhisperAdapter implements SttAdapter {
@@ -56,7 +57,7 @@ export class GptRealtimeWhisperAdapter implements SttAdapter {
 
     ws.on('open', () => {
       opened = true
-      // 現行GA仕様: audio.input.* にネスト。gpt-realtime-whisper は turn_detection=null で手動 commit。
+      // 現行GA仕様: audio.input.* にネスト。turn_detection=null で手動 commit。
       sendJson({
         type: 'session.update',
         session: {
@@ -66,7 +67,7 @@ export class GptRealtimeWhisperAdapter implements SttAdapter {
               format: { type: 'audio/pcm', rate: 24000 },
               transcription: {
                 model: config.model,
-                ...(config.language ? { language: config.language } : {}),
+                ...(config.language ? sttLanguageFields(config.model, config.language) : {}),
                 delay: config.delay
               },
               turn_detection: null

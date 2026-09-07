@@ -229,7 +229,7 @@ async function startRecording(): Promise<void> {
         try {
           if (editOriginal) {
             // 失敗時は貼り付けない（選択範囲を壊さない）
-            const edited = await applyVoiceEdit(editOriginal, text, apiKey)
+            const edited = await applyVoiceEdit(editOriginal, text, apiKey, config.correctionModel)
             if (!edited) {
               teardownSession('error', 'テキストの編集に失敗しました')
               return

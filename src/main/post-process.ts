@@ -1,9 +1,8 @@
 import { AppConfig } from '@shared/ipc'
 import { requestChatCompletion } from './chat'
 
-/** LLM 表記最適化に使う最安クラスのモデル（2026-03-17 リリース）。 */
-const CORRECTION_MODEL = 'gpt-5.4-nano'
-const LLM_TIMEOUT_MS = 4000
+/** Luna medium は nano より遅いことがある。失敗時はルール辞書へ落ちる。 */
+const LLM_TIMEOUT_MS = 8000
 
 /**
  * 同音異義の定番誤変換を補正するルール辞書。
@@ -54,7 +53,7 @@ export async function postProcess(
   const ruled = applyRuleDictionary(text)
   if (!config.llmCorrection || !ruled.trim()) return ruled
   const corrected = await requestChatCompletion({
-    model: CORRECTION_MODEL,
+    model: config.correctionModel,
     systemPrompt: SYSTEM_PROMPT,
     userContent: ruled,
     apiKey,

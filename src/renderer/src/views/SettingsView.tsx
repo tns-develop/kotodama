@@ -7,6 +7,7 @@ import {
   type MacPermissionStatus,
   type TranscriptionDelay
 } from '@shared/ipc'
+import { CORRECTION_MODELS, STT_MODELS } from '@shared/models'
 import { eventToAccelerator, isValidAccelerator, keySavedPlaceholder } from '../lib/accelerator'
 import { listAudioInputDevices, type AudioInputDevice } from '../lib/audio-devices'
 
@@ -145,10 +146,12 @@ export function SettingsView() {
         setKeySaved(true)
       }
       const result = await window.api.setConfig({
+        model: config.model,
         language: config.language,
         delay: config.delay,
         hotkey: config.hotkey.trim(),
         llmCorrection: config.llmCorrection,
+        correctionModel: config.correctionModel,
         doubleControl: config.doubleControl,
         soundEnabled: config.soundEnabled,
         microphoneDeviceId: config.microphoneDeviceId,
@@ -194,8 +197,28 @@ export function SettingsView() {
       </label>
 
       <label className="field">
-        <span>モデル</span>
-        <input type="text" value={config.model} readOnly />
+        <span>音声入力モデル</span>
+        <select value={config.model} onChange={(e) => update('model', e.target.value)}>
+          {STT_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="field">
+        <span>表記補正・音声編集のモデル</span>
+        <select
+          value={config.correctionModel}
+          onChange={(e) => update('correctionModel', e.target.value)}
+        >
+          {CORRECTION_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label className="field">
@@ -249,7 +272,7 @@ export function SettingsView() {
           checked={config.llmCorrection}
           onChange={(e) => update('llmCorrection', e.target.checked)}
         />
-        <span>漢字変換をLLMで文脈補正する（gpt-5.4-nano / 追加課金あり）</span>
+        <span>漢字変換をLLMで文脈補正する（追加課金あり）</span>
       </label>
 
       <div className="field">
@@ -261,7 +284,7 @@ export function SettingsView() {
           />
           <span>
             テキストを選択してから録音すると、話した指示でその場を書き換える（音声編集モード /
-            gpt-5.4-nano・追加課金あり）
+            追加課金あり）
           </span>
         </label>
         <small>録音開始時に選択の有無を確認するため、通常の音声入力の開始が僅かに遅くなります。</small>

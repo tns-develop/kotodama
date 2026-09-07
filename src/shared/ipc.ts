@@ -1,3 +1,5 @@
+import { DEFAULT_CORRECTION_MODEL, DEFAULT_STT_MODEL, MODEL_CATALOG_REV } from './models'
+
 export const IPC = {
   // renderer -> main
   audioPcm: 'audio:pcm',
@@ -46,8 +48,12 @@ export interface AppConfig {
   delay: TranscriptionDelay
   /** 録音トグルのグローバルホットキー (Electron accelerator)。空文字なら未登録 */
   hotkey: string
-  /** completed テキストを LLM で文脈補正するか (gpt-5.4-nano)。既定 false */
+  /** completed テキストを LLM で文脈補正するか。既定 false */
   llmCorrection: boolean
+  /** 表記補正・音声編集の Chat Completions モデル */
+  correctionModel: string
+  /** 既存 STT を新既定へ寄せ済みか。設定UIには出さない */
+  modelCatalogRev: number
   /** 修飾キーで録音開始/終了するか（Windows=Alt+Ctrl 1回、他=Control ダブルタップ開始・1回終了 / uiohook） */
   doubleControl: boolean
   /** 録音開始/終了時に効果音を鳴らすか。既定 true */
@@ -56,17 +62,19 @@ export interface AppConfig {
   inputMonitoringGuideDismissed: boolean
   /** 使用するマイクの deviceId。空文字なら OS 既定 */
   microphoneDeviceId: string
-  /** 録音開始時に選択テキストを検出し、音声指示で書き換えるか (gpt-5.4-nano)。既定 true */
+  /** 録音開始時に選択テキストを検出し、音声指示で書き換えるか。既定 true */
   voiceEditEnabled: boolean
 }
 
 export function getDefaultConfig(platform: KotodamaPlatform): AppConfig {
   return {
-    model: 'gpt-realtime-whisper',
+    model: DEFAULT_STT_MODEL,
     language: 'ja',
     delay: 'minimal',
     hotkey: platform === 'win32' ? '' : 'CommandOrControl+Shift+R',
     llmCorrection: false,
+    correctionModel: DEFAULT_CORRECTION_MODEL,
+    modelCatalogRev: MODEL_CATALOG_REV,
     doubleControl: true,
     soundEnabled: true,
     inputMonitoringGuideDismissed: false,

@@ -40,7 +40,18 @@ export function loadConfig(): AppConfig {
   if (!existsSync(path)) return { ...defaults }
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<AppConfig>
-    return { ...defaults, ...parsed }
+    const merged = { ...defaults, ...parsed }
+    // 判定は保存ファイル側。マージ後だと defaults の rev で寄せ済みに見える。
+    if (parsed.modelCatalogRev == null) {
+      merged.model = defaults.model
+      merged.modelCatalogRev = defaults.modelCatalogRev
+      try {
+        writeFileSync(path, JSON.stringify(merged, null, 2), 'utf-8')
+      } catch {
+        // 書けなくても今回のプロセスは寄せ後の値を使う。次回起動で再試行する。
+      }
+    }
+    return merged
   } catch {
     return { ...defaults }
   }

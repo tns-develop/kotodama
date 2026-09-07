@@ -1,3 +1,5 @@
+import { chatSamplingForModel } from '@shared/models'
+
 /**
  * OpenAI Chat Completions の単発呼び出し。表記補正（post-process）と
  * 音声編集（voice-edit）で共用する。
@@ -37,7 +39,7 @@ export async function requestChatCompletion({
       },
       body: JSON.stringify({
         model,
-        temperature: 0,
+        ...chatSamplingForModel(model),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent }
