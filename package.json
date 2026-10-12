@@ -1,6 +1,6 @@
 {
   "name": "kotodama",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "description": "Realtime voice input with gpt-realtime-whisper (TypeScript + Electron)",
   "main": "./out/main/index.js",
   "author": "",
@@ -15,9 +15,9 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "rebuild": "electron-rebuild -f -w @nut-tree-fork/nut-js",
     "rebuild:all": "npm run rebuild && electron-rebuild -f -w uiohook-napi",
-    "dist:mac": "electron-vite build && electron-builder --mac --publish never",
+    "dist:mac": "electron-vite build && node scripts/app-version.mjs --builder --mac --publish never",
     "package:mac": "npm run rebuild:all && npm run dist:mac",
-    "dist:win": "electron-vite build && electron-builder --win --publish never"
+    "dist:win": "electron-vite build && node scripts/app-version.mjs --builder --win --publish never"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",

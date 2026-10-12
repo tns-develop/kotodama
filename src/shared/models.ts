@@ -9,6 +9,7 @@ export const STT_MODELS = [
 export const DEFAULT_STT_MODEL = STT_MODELS[0].id
 
 export const CORRECTION_MODELS = [
+  { id: 'gpt-6-luna', label: 'GPT-6 Luna (low)', reasoningEffort: 'low' },
   { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna (medium)', reasoningEffort: 'medium' },
   { id: 'gpt-5.4-nano', label: 'GPT-5.4 nano' }
 ] as const
