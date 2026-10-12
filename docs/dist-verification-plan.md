@@ -27,12 +27,9 @@ npx electron-rebuild -f -w uiohook-napi  # rebuild スクリプト対象外
 
 **API キー**: Tier 1 以上 + Credit balance > $0（[handover §5-2](./handover.md)）。起動後トレイ →「設定…」で保存。
 
-**未署名ビルド**（署名・公証は後回し）:
+**簡易署名**（macOS の許可を Kotodama に結びつける。Developer ID と公証は後回し）:
 
-```bash
-export CSC_IDENTITY_AUTO_DISCOVERY=false
-export CSC_IDENTITY="-"   # macOS のみ。Windows は AUTO_DISCOVERY=false のみ
-```
+`electron-builder.yml` の `mac.identity: "-"` と `mac.forceCodeSigning: true` で、`npm run dist:mac` が必ず簡易署名する。署名できないビルドは失敗する。`CSC_IDENTITY=’-’` は electron-builder 26 では読まれないので使わない。`CSC_IDENTITY_AUTO_DISCOVERY=false` だけだと署名が省略され、識別子が Electron のままになる。
 
 macOS Gatekeeper 警告: `xattr -cr dist/mac*/Kotodama.app` または右クリック →「開く」。
 
@@ -41,8 +38,6 @@ macOS Gatekeeper 警告: `xattr -cr dist/mac*/Kotodama.app` または右クリ�
 ## フェーズ 1: macOS
 
 ```bash
-export CSC_IDENTITY_AUTO_DISCOVERY=false
-export CSC_IDENTITY="-"
 npm run dist:mac
 ```
 

@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -26,6 +26,31 @@ export function appVersion() {
   return packageVersion()
 }
 
+/**
+ * 簡易署名されていないと識別子が Electron のままになり、macOS の許可がビルドに結びつかない。
+ * electron-builder が署名を飛ばした場合はここで失敗させる。
+ */
+function assertMacAdhocSignature() {
+  const candidates = ['dist/mac-arm64/Kotodama.app', 'dist/mac/Kotodama.app'].map((p) => join(root, p))
+  const appPath = candidates.find((p) => existsSync(p))
+  if (!appPath) {
+    console.error('[kotodama] 簡易署名の確認に失敗: Kotodama.app がありません')
+    process.exit(1)
+  }
+  const result = spawnSync('codesign', ['-dv', '--verbose=4', appPath], { encoding: 'utf8' })
+  const text = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
+  const unsigned =
+    result.status !== 0 ||
+    text.includes('Identifier=Electron') ||
+    text.includes('linker-signed') ||
+    text.includes('Info.plist=not bound')
+  if (unsigned) {
+    console.error('[kotodama] 簡易署名されていません。macOS の許可がこのビルドに結びつきません。')
+    console.error(text.trim())
+    process.exit(1)
+  }
+}
+
 function runBuilder(builderArgs) {
   const version = appVersion()
   const cli = join(root, 'node_modules', 'electron-builder', 'cli.js')
@@ -34,7 +59,8 @@ function runBuilder(builderArgs) {
     [cli, ...builderArgs, `--config.extraMetadata.version=${version}`],
     { cwd: root, stdio: 'inherit' }
   )
-  process.exit(result.status ?? 1)
+  if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1)
+  if (builderArgs.includes('--mac')) assertMacAdhocSignature()
 }
 
 const builderAt = process.argv.indexOf('--builder')
