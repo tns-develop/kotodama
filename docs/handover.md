@@ -199,7 +199,7 @@ npm run dev
 | --- | --- | --- | --- |
 | 1 | **浮遊ピルをマウス位置付近に表示** | ✅ 実装済み | `src/main/index.ts` `showOverlay()` を `screen.getCursorScreenPoint()` + `getDisplayNearestPoint()` でカーソル近傍（少し下・右）に配置、`workArea` で clamp。**録音開始時のみ配置**（常時追従はしない） |
 | 2 | **文脈を考慮した漢字変換** | ✅ 実装済み | 新モジュール `src/main/post-process.ts`。**ルール辞書補正（常時・オフライン）** ＋ **任意 LLM 補正（設定 ON/OFF）**。LLM は `gpt-5.4-nano`（Chat Completions、4s タイムアウト、失敗時はルール結果へフォールバック）。`onCompleted` で `injectText` 前に通す。設定 `llmCorrection`（既定 false）追加 |
-| 3 | **起動コマンド（ホットキー）を任意に変更** | ✅ 実装済み | `App.tsx` 設定画面に「キーを録音」ボタン（**ウィンドウ全体で keydown 捕捉**→accelerator 変換、Esc でキャンセル）＋簡易バリデーション。`registerHotkey` が成否を返し、`setConfig` 結果（`SetConfigResult.hotkeyOk`）で UI 通知。登録失敗時は直前の有効ホットキーへ復帰。**Control 単独はグローバルホットキー不可**のため、別途「Control ダブルタップ起動」を `uiohook-napi`（`src/main/global-keys.ts`）で実装。設定 `doubleControl`（既定 true）。macOS は「入力監視/アクセシビリティ」権限が必要 |
+| 3 | **起動コマンド（ホットキー）を任意に変更** | ✅ 実装済み | `App.tsx` 設定画面に「キーを録音」ボタン（**ウィンドウ全体で keydown 捕捉**→accelerator 変換、Esc でキャンセル）＋簡易バリデーション。`registerHotkey` が成否を返し、`setConfig` 結果（`SetConfigResult.hotkeyOk`）で UI 通知。登録失敗時は直前の有効ホットキーへ復帰。**Control 単独はグローバルホットキー不可**のため、別途「Control ダブルタップ起動」を `uiohook-napi`（`src/main/global-keys.ts`）で実装。設定 `doubleControl`（既定 true）。macOS はアクセシビリティ権限が必要 |
 | 4 | **入力文字が増えると途中から見えなくなる** | ✅ 実装済み | `styles.css` `.pill .partial` を折り返し＋ `-webkit-line-clamp: 4`。オーバーレイ窓を 460×200 に拡張、`.overlay` を左上寄せに変更（カーソル基準配置と整合） |
 
 ### 追加対応（2026-06-17 第2弾 実装済み）

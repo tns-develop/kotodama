@@ -27,14 +27,14 @@ export function appVersion() {
 }
 
 /**
- * 簡易署名されていないと識別子が Electron のままになり、macOS の許可がビルドに結びつかない。
- * electron-builder が署名を飛ばした場合はここで失敗させる。
+ * 署名されていないと識別子が Electron のままになり、macOS の許可がビルドに結びつかない。
+ * ad-hoc は識別子は付くが、更新のたびに許可が外れる。
  */
-function assertMacAdhocSignature() {
+function assertMacSigned() {
   const candidates = ['dist/mac-arm64/Kotodama.app', 'dist/mac/Kotodama.app'].map((p) => join(root, p))
   const appPath = candidates.find((p) => existsSync(p))
   if (!appPath) {
-    console.error('[kotodama] 簡易署名の確認に失敗: Kotodama.app がありません')
+    console.error('[kotodama] 署名の確認に失敗: Kotodama.app がありません')
     process.exit(1)
   }
   const result = spawnSync('codesign', ['-dv', '--verbose=4', appPath], { encoding: 'utf8' })
@@ -45,9 +45,12 @@ function assertMacAdhocSignature() {
     text.includes('linker-signed') ||
     text.includes('Info.plist=not bound')
   if (unsigned) {
-    console.error('[kotodama] 簡易署名されていません。macOS の許可がこのビルドに結びつきません。')
+    console.error('[kotodama] 署名されていません。macOS の許可がこのビルドに結びつきません。')
     console.error(text.trim())
     process.exit(1)
+  }
+  if (text.includes('Signature=adhoc')) {
+    console.warn('[kotodama] ad-hoc 署名です。更新のたびに macOS の許可が外れます。')
   }
 }
 
@@ -60,7 +63,7 @@ function runBuilder(builderArgs) {
     { cwd: root, stdio: 'inherit' }
   )
   if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1)
-  if (builderArgs.includes('--mac')) assertMacAdhocSignature()
+  if (builderArgs.includes('--mac')) assertMacSigned()
 }
 
 const builderAt = process.argv.indexOf('--builder')

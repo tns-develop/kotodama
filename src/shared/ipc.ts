@@ -13,8 +13,9 @@ export const IPC = {
   closeSettings: 'settings:close',
   permissionsGetStatus: 'permissions:getStatus',
   permissionsOpenPane: 'permissions:openPane',
-  permissionsCopyAppPath: 'permissions:copyAppPath',
   permissionsRequestMic: 'permissions:requestMic',
+  permissionsRelaunch: 'permissions:relaunch',
+  permissionsReset: 'permissions:reset',
   longRecordingResponse: 'longRecording:response',
   // main -> renderer
   recordingToggle: 'recording:toggle',
@@ -58,8 +59,6 @@ export interface AppConfig {
   doubleControl: boolean
   /** 録音開始/終了時に効果音を鳴らすか。既定 true */
   soundEnabled: boolean
-  /** 入力監視の案内ダイアログを「後で」にしたか */
-  inputMonitoringGuideDismissed: boolean
   /** 使用するマイクの deviceId。空文字なら OS 既定 */
   microphoneDeviceId: string
   /** 録音開始時に選択テキストを検出し、音声指示で書き換えるか。既定 true */
@@ -77,7 +76,6 @@ export function getDefaultConfig(platform: KotodamaPlatform): AppConfig {
     modelCatalogRev: MODEL_CATALOG_REV,
     doubleControl: true,
     soundEnabled: true,
-    inputMonitoringGuideDismissed: false,
     microphoneDeviceId: '',
     voiceEditEnabled: true
   }
@@ -112,24 +110,15 @@ export interface ToggleRecordingPayload {
 /** 長期録音確認ダイアログから main への応答 */
 export type LongRecordingAction = 'continue' | 'stop'
 
-export type MacPermissionKind = 'microphone' | 'accessibility' | 'inputMonitoring'
+export type MacPermissionKind = 'microphone' | 'accessibility'
 
-export type MacPermissionState =
-  | 'granted'
-  | 'denied'
-  | 'notDetermined'
-  | 'needsSetup'
-  | 'likelyOk'
-  | 'failed'
-  | 'notApplicable'
-  | 'unknown'
+export type MacPermissionState = 'granted' | 'denied' | 'notDetermined' | 'needsSetup' | 'unknown'
 
 export interface MacPermissionStatus {
   microphone: MacPermissionState
   accessibility: MacPermissionState
-  inputMonitoring: MacPermissionState
-  /** 配布 .app の絶対パス。開発時は空 */
-  appBundlePath: string
+  /** 許可済みでもフックが起動しない。再起動するまで反映されない */
+  restartRequired: boolean
   isPackaged: boolean
 }
 
@@ -153,9 +142,10 @@ export interface KotodamaApi {
   openSettings(): void
   closeSettings(): void
   /** macOS のみ。他 OS では null */
-  getMacPermissions(doubleControl: boolean): Promise<MacPermissionStatus | null>
+  getMacPermissions(): Promise<MacPermissionStatus | null>
   openMacPrivacyPane(kind: MacPermissionKind): Promise<void>
-  copyMacAppPath(): Promise<boolean>
   requestMicAccess(): Promise<boolean>
+  relaunchApp(): Promise<void>
+  resetMacPermissions(): Promise<void>
   respondLongRecording(action: LongRecordingAction): void
 }

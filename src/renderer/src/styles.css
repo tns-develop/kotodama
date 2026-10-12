@@ -240,27 +240,6 @@ body {
   color: #ff4d4f;
 }
 
-.perm-badge--na {
-  background: color-mix(in srgb, currentColor 10%, transparent);
-  color: #888;
-}
-
-.permissions-path {
-  margin: 10px 0 0;
-  font-size: 10px;
-  word-break: break-all;
-}
-
-.permissions-path code {
-  font-family: ui-monospace, monospace;
-}
-
-.perm-message {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: #2e9e5b;
-}
-
 /* 録音中の浮遊ピル */
 .overlay {
   margin: 0;

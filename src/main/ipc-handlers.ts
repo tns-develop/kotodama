@@ -10,12 +10,13 @@ import {
 import { applyDoubleControl, getActiveHotkey, registerHotkey } from './hotkeys'
 import { closeSettingsWindow, openSettingsWindow } from './windows'
 import {
-  clearInputMonitoringDismissIfResolved,
-  copyMacAppBundlePath,
   ensureMicrophoneAccess,
   getMacPermissionStatus,
-  guideInputMonitoringIfNeeded,
-  openMacPrivacyPane
+  openMacPrivacyPane,
+  relaunchApp,
+  reportHookState,
+  resetMacPermissions,
+  runMacPermissionOnboarding
 } from './permissions'
 
 /**
@@ -46,15 +47,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.getConfig, () => loadConfig())
   ipcMain.handle(IPC.setConfig, (_e, partial: Partial<AppConfig>): SetConfigResult => {
     const previous = loadConfig()
-
-    // inputMonitoringGuideDismissed は main 専用フラグ。
-    // renderer の Partial 更新では触らないため、未指定時は既存値を保持する。
-    const mergedInput: Partial<AppConfig> = {
-      ...partial,
-      inputMonitoringGuideDismissed:
-        partial.inputMonitoringGuideDismissed ?? previous.inputMonitoringGuideDismissed
-    }
-    let merged = saveConfig(mergedInput)
+    let merged = saveConfig(partial)
 
     // ホットキー文字列を OS グローバルショートカットとして再登録
     const hotkeyOk = registerHotkey(merged.hotkey)
@@ -64,13 +57,10 @@ export function registerIpcHandlers(): void {
       merged = saveConfig({ hotkey: activeHotkey })
     }
 
-    // doubleControl 変更時は uiohook の開始/停止を反映
     applyDoubleControl(merged.doubleControl)
-    // 入力監視が不要になったら「案内を後でにした」フラグをクリア
-    clearInputMonitoringDismissIfResolved(merged.doubleControl)
-    // OFF → ON に切り替わった初回のみ、macOS 入力監視の案内を表示
+    reportHookState()
     if (!previous.doubleControl && merged.doubleControl) {
-      void guideInputMonitoringIfNeeded()
+      void runMacPermissionOnboarding()
     }
 
     return { config: merged, hotkeyOk }
@@ -86,17 +76,19 @@ export function registerIpcHandlers(): void {
 
   // --- macOS プライバシー権限（他 OS では getStatus のみ null を返す） ---
 
-  /** マイク・アクセシビリティ・入力監視の付与状態を取得 */
-  ipcMain.handle(IPC.permissionsGetStatus, (_e, doubleControl: boolean) => {
+  /** マイクとアクセシビリティの付与状態を取得 */
+  ipcMain.handle(IPC.permissionsGetStatus, () => {
     if (process.platform !== 'darwin') return null
-    return getMacPermissionStatus(doubleControl)
+    return getMacPermissionStatus()
   })
   /** システム設定の該当プライバシーペインを開く */
   ipcMain.handle(IPC.permissionsOpenPane, (_e, kind: MacPermissionKind) =>
     openMacPrivacyPane(kind)
   )
-  /** 配布 .app のパスをクリップボードへコピー（手動追加用） */
-  ipcMain.handle(IPC.permissionsCopyAppPath, () => copyMacAppBundlePath())
   /** マイク権限ダイアログを表示し、許可をリクエスト */
   ipcMain.handle(IPC.permissionsRequestMic, () => ensureMicrophoneAccess())
+  ipcMain.handle(IPC.permissionsRelaunch, () => {
+    relaunchApp()
+  })
+  ipcMain.handle(IPC.permissionsReset, () => resetMacPermissions())
 }

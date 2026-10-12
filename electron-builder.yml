@@ -13,10 +13,9 @@ extraResources:
     filter:
       - "**/*"
 mac:
-  # 「-」は簡易署名（ad-hoc）。Developer ID が無くても Info.plist を署名に結び、
-  # プロセスを Electron ではなく Kotodama として macOS の許可対象にする。
-  # 環境変数 CSC_IDENTITY は electron-builder 26 では読まれない。
-  identity: "-"
+  # 自己署名証明書。署名要件が証明書に固定されるので、再ビルドしても macOS の許可が外れない。
+  # 「-」は証明書名の部分一致になり、別の証明書が選ばれる。CI は --config.mac.identity=- で ad-hoc にする。
+  identity: "Kotodama Local Signing"
   forceCodeSigning: true
   category: public.app-category.productivity
   hardenedRuntime: true

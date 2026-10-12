@@ -36,12 +36,13 @@ const api: KotodamaApi = {
   saveApiKey: (key) => ipcRenderer.invoke(IPC.saveApiKey, key) as Promise<boolean>,
   openSettings: () => ipcRenderer.send(IPC.openSettings),
   closeSettings: () => ipcRenderer.send(IPC.closeSettings),
-  getMacPermissions: (doubleControl) =>
-    ipcRenderer.invoke(IPC.permissionsGetStatus, doubleControl) as Promise<MacPermissionStatus | null>,
+  getMacPermissions: () =>
+    ipcRenderer.invoke(IPC.permissionsGetStatus) as Promise<MacPermissionStatus | null>,
   openMacPrivacyPane: (kind) =>
     ipcRenderer.invoke(IPC.permissionsOpenPane, kind) as Promise<void>,
-  copyMacAppPath: () => ipcRenderer.invoke(IPC.permissionsCopyAppPath) as Promise<boolean>,
   requestMicAccess: () => ipcRenderer.invoke(IPC.permissionsRequestMic) as Promise<boolean>,
+  relaunchApp: () => ipcRenderer.invoke(IPC.permissionsRelaunch) as Promise<void>,
+  resetMacPermissions: () => ipcRenderer.invoke(IPC.permissionsReset) as Promise<void>,
   respondLongRecording: (action: LongRecordingAction) =>
     ipcRenderer.send(IPC.longRecordingResponse, action)
 }

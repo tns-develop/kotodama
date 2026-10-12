@@ -11,7 +11,7 @@ import { postProcess } from './post-process'
 import { captureSelectionIfAny } from './selection'
 import { applyVoiceEdit } from './voice-edit'
 import { setCtrlKeyMode } from './global-keys'
-import { ensureMicrophoneAccess, guideAccessibilityIfNeeded } from './permissions'
+import { ensureMicrophoneAccess, runMacPermissionOnboarding } from './permissions'
 import { broadcast, closeLongRecordingDialog, hideOverlay, openLongRecordingDialog, openSettingsWindow, sendToggle, showOverlay } from './windows'
 import { updateTray } from './tray'
 
@@ -187,8 +187,8 @@ async function startRecording(): Promise<void> {
     setState('error', 'マイク権限がありません')
     return
   }
-  // アクセシビリティ権限の案内（未許可でも録音は継続）
-  void guideAccessibilityIfNeeded()
+  // 未許可でも録音は続ける。案内は配布ビルドのウィザードに任せる
+  void runMacPermissionOnboarding()
 
   const config = loadConfig()
   // 選択テキストがあれば音声編集モードに入る。await を含むため recording=true より前に

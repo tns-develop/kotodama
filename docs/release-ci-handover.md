@@ -25,8 +25,8 @@
 | 項目 | 内容 |
 | --- | --- |
 | 表示名 | `Kotodama`（`productName` / `CFBundleDisplayName` / UI） |
-| 権限オンボーディング | [permissions.ts](../src/main/permissions.ts) — 入力監視案内、deep link、`.app` パスコピー |
-| 設定画面 | macOS 権限セクション（マイク / アクセシビリティ / 入力監視） |
+| 権限オンボーディング | [permissions.ts](../src/main/permissions.ts) — マイク → アクセシビリティ、再起動の促し、権限リセット |
+| 設定画面 | macOS 権限セクション（マイク / アクセシビリティ、再起動とリセット） |
 | 関連 | [global-keys.ts](../src/main/global-keys.ts)、[SettingsView.tsx](../src/renderer/src/views/SettingsView.tsx) |
 
 ### ローカルビルド成果物（参考）
@@ -79,17 +79,10 @@ flowchart LR
 
 | ジョブ | runner | コマンド | 成果物（electron-builder 既定） |
 | --- | --- | --- | --- |
-| `build-macos` | `macos-latest` | `npm run dist:mac` | `dist/Kotodama-<ver>-arm64.dmg`（+ zip） |
+| `build-macos` | `macos-latest` | `npm run dist:mac -- --config.mac.identity=-` | `dist/Kotodama-<ver>-arm64.dmg`（+ zip） |
 | `build-windows` | `windows-latest` | `npm run dist:win` | `dist/Kotodama Setup <ver>.exe`（**x64**） |
 
-両ジョブ共通の環境変数:
-
-```yaml
-env:
-  CSC_IDENTITY_AUTO_DISCOVERY: false
-  # macOS のみ
-  CSC_IDENTITY: "-"
-```
+両ジョブ共通の環境変数は `CSC_IDENTITY_AUTO_DISCOVERY: false`。`CSC_IDENTITY` は electron-builder 26 では読まれない。macOS ジョブは `--config.mac.identity=-` を付けて ad-hoc 署名にする（ランナーに自己署名証明書が無いため。この DMG は更新のたびに macOS の許可が外れる）。
 
 両ジョブ共通ステップ（要点）:
 
@@ -101,7 +94,7 @@ env:
 - run: npm ci
 - run: npm run rebuild
 - run: npx electron-rebuild -f -w uiohook-napi
-- run: npm run dist:mac  # or dist:win
+- run: npm run dist:mac -- --config.mac.identity=-  # Windows は dist:win。identity は付けない
 ```
 
 ### Release へのアップロード
@@ -174,5 +167,5 @@ Release 本文には [dist-verification-plan.md](./dist-verification-plan.md) �
 | [electron-builder.yml](../electron-builder.yml) | `productName: Kotodama`、mac entitlements |
 | [src/main/permissions.ts](../src/main/permissions.ts) | macOS 権限案内・状態 |
 | [src/main/global-keys.ts](../src/main/global-keys.ts) | uiohook 状態 export |
-| [src/shared/ipc.ts](../src/shared/ipc.ts) | `MacPermissionStatus`、`inputMonitoringGuideDismissed` |
+| [src/shared/ipc.ts](../src/shared/ipc.ts) | `MacPermissionStatus`（`restartRequired`） |
 | [src/renderer/src/views/SettingsView.tsx](../src/renderer/src/views/SettingsView.tsx) | macOS 権限 UI |

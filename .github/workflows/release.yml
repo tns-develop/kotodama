@@ -36,8 +36,6 @@ jobs:
       github.event.inputs.platform == 'all' ||
       github.event.inputs.platform == 'macos'
     runs-on: macos-latest
-    env:
-      CSC_IDENTITY: '-'
     steps:
       - uses: actions/checkout@v4
 
@@ -49,7 +47,7 @@ jobs:
       - run: npm ci
       - run: npm run rebuild
       - run: npx electron-rebuild -f -w uiohook-napi
-      - run: npm run dist:mac
+      - run: npm run dist:mac -- --config.mac.identity=-
 
       - uses: actions/upload-artifact@v4
         with:

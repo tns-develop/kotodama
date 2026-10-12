@@ -4,9 +4,11 @@
  * - stop: 録音中の終了用（Windows=Alt+Ctrl 1回 / 他 OS=Control 1回）
  *
  * Electron の globalShortcut は単独修飾キーを登録できないため、ネイティブの
- * グローバルキーフック(uiohook-napi)で代替する。macOS では「入力監視」権限が必要。
+ * グローバルキーフック(uiohook-napi)で代替する。macOS ではアクセシビリティ権限が必要。
  * ネイティブモジュールのロード/起動失敗でアプリ全体を巻き込まないよう、全て try/catch でガードする。
  */
+
+import { systemPreferences } from 'electron'
 
 const DOUBLE_TAP_WINDOW_MS = 400
 const IS_WIN = process.platform === 'win32'
@@ -27,7 +29,10 @@ type Uiohook = {
 
 let hook: Uiohook | null = null
 let running = false
+/** require 失敗。モジュールが無いので再試行しない */
 let uiohookLoadFailed = false
+/** start 失敗。権限付与後に再試行できる */
+let uiohookStartFailed = false
 let mode: CtrlKeyMode = 'idle'
 let lastTapAt = 0
 let trigger: () => void = () => {}
@@ -115,9 +120,14 @@ export function isDoubleCtrlRunning(): boolean {
   return running
 }
 
-/** uiohook の load/start に失敗したか。 */
+/** uiohook の require に失敗したか。再試行しても復旧しない。 */
 export function wasUiohookLoadFailed(): boolean {
   return uiohookLoadFailed
+}
+
+/** 直前の start が権限不足などで失敗したか。 */
+export function wasUiohookStartFailed(): boolean {
+  return uiohookStartFailed
 }
 
 /** 修飾キー検知を開始する。多重起動は無視。 */
@@ -126,6 +136,11 @@ export function startDoubleCtrl(cb: () => void): void {
   if (running) return
   const h = loadHook()
   if (!h) return
+  // 未許可のまま start すると uiohook が独自ダイアログを出し、失敗フラグが残って再試行できない
+  if (process.platform === 'darwin' && !systemPreferences.isTrustedAccessibilityClient(false)) {
+    uiohookStartFailed = false
+    return
+  }
   try {
     if (IS_WIN) {
       h.on('keydown', onWinKeydown)
@@ -135,8 +150,9 @@ export function startDoubleCtrl(cb: () => void): void {
     }
     h.start()
     running = true
+    uiohookStartFailed = false
   } catch (err) {
-    uiohookLoadFailed = true
+    uiohookStartFailed = true
     // start 失敗時にリスナーが残ると次回起動で二重登録→二重発火するため除去する
     removeHookListeners(h)
     console.error('[kotodama] uiohook start failed:', err instanceof Error ? err.message : err)

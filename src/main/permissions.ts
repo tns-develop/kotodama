@@ -1,20 +1,26 @@
-import { app, clipboard, dialog, shell, systemPreferences } from 'electron'
-import { resolve } from 'node:path'
-import {
-  MacPermissionKind,
-  MacPermissionState,
-  MacPermissionStatus
-} from '@shared/ipc'
-import { isDoubleCtrlRunning, wasUiohookLoadFailed } from './global-keys'
-import { loadConfig, saveConfig } from './store'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { app, dialog, shell, systemPreferences } from 'electron'
+import { MacPermissionKind, MacPermissionState, MacPermissionStatus } from '@shared/ipc'
+import { isDoubleCtrlRunning, wasUiohookLoadFailed, wasUiohookStartFailed } from './global-keys'
+import { loadConfig } from './store'
+
+const execFileAsync = promisify(execFile)
 
 const PRIVACY_QUERY: Record<MacPermissionKind, string> = {
-  inputMonitoring: 'Privacy_ListenEvent',
   accessibility: 'Privacy_Accessibility',
   microphone: 'Privacy_Microphone'
 }
 
-let inputMonitoringGuideShownThisSession = false
+/** electron-builder.yml の appId。許可のリセット対象 */
+const BUNDLE_ID = 'com.example.kotodama'
+const TCC_SERVICES = ['Accessibility', 'Microphone', 'ListenEvent'] as const
+
+let onboardingDismissedThisSession = false
+let onboardingRunning = false
+let restartRequired = false
+let relaunchPromptShown = false
+let watcher: ReturnType<typeof setInterval> | null = null
 
 function micState(): MacPermissionState {
   const status = systemPreferences.getMediaAccessStatus('microphone')
@@ -28,25 +34,13 @@ function accessibilityState(): MacPermissionState {
   return systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'needsSetup'
 }
 
-function inputMonitoringState(doubleControlEnabled: boolean): MacPermissionState {
-  if (!doubleControlEnabled) return 'notApplicable'
-  if (wasUiohookLoadFailed()) return 'failed'
-  if (isDoubleCtrlRunning()) return 'likelyOk'
-  return 'needsSetup'
-}
-
-/** 配布 .app の絶対パス。開発時は空文字。 */
-export function getMacAppBundlePath(): string {
-  if (process.platform !== 'darwin' || !app.isPackaged) return ''
-  return resolve(app.getPath('exe'), '../../..')
-}
-
-/** .app パスをクリップボードへ。成功時 true。 */
-export function copyMacAppBundlePath(): boolean {
-  const path = getMacAppBundlePath()
-  if (!path) return false
-  clipboard.writeText(path)
-  return true
+export function getMacPermissionStatus(): MacPermissionStatus {
+  return {
+    microphone: micState(),
+    accessibility: accessibilityState(),
+    restartRequired,
+    isPackaged: app.isPackaged
+  }
 }
 
 /** プライバシー設定ペインを開く（macOS 13+ は System Settings URL、それ以前はレガシー URL）。 */
@@ -59,16 +53,6 @@ export async function openMacPrivacyPane(kind: MacPermissionKind): Promise<void>
       ? `x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?${query}`
       : `x-apple.systempreferences:com.apple.preference.security?${query}`
   await shell.openExternal(url)
-}
-
-export function getMacPermissionStatus(doubleControlEnabled: boolean): MacPermissionStatus {
-  return {
-    microphone: micState(),
-    accessibility: accessibilityState(),
-    inputMonitoring: inputMonitoringState(doubleControlEnabled),
-    appBundlePath: getMacAppBundlePath(),
-    isPackaged: app.isPackaged
-  }
 }
 
 /**
@@ -95,84 +79,149 @@ export function ensureAccessibilityAccess(promptIfNeeded = true): boolean {
   return systemPreferences.isTrustedAccessibilityClient(promptIfNeeded)
 }
 
-export async function guideAccessibilityIfNeeded(): Promise<void> {
-  if (process.platform !== 'darwin') return
-  if (systemPreferences.isTrustedAccessibilityClient(false)) return
+function stopWatcher(): void {
+  if (!watcher) return
+  clearInterval(watcher)
+  watcher = null
+}
 
-  const appName = app.getName()
-  const { response } = await dialog.showMessageBox({
-    type: 'warning',
-    buttons: ['システム設定を開く', '後で'],
-    defaultId: 0,
-    cancelId: 1,
-    title: 'アクセシビリティ権限が必要です',
-    message: 'カーソル位置への貼り付けにはアクセシビリティ権限が必要です。',
-    detail:
-      app.isPackaged
-        ? `「システム設定 > プライバシーとセキュリティ > アクセシビリティ」で ${appName} を許可してください。`
-        : `「システム設定 > プライバシーとセキュリティ > アクセシビリティ」で ${appName}（開発中は Electron / ターミナル）を許可してください。`
-  })
-  if (response === 0) {
-    await openMacPrivacyPane('accessibility')
+/** 許可後もフックが起動しなければ、再起動しないと反映されない。 */
+export function reportHookState(): void {
+  if (process.platform !== 'darwin') return
+  const needsHook = loadConfig().doubleControl
+  if (!needsHook || isDoubleCtrlRunning() || wasUiohookLoadFailed()) {
+    restartRequired = false
+    return
+  }
+  if (accessibilityState() === 'granted' && wasUiohookStartFailed()) {
+    restartRequired = true
+    void promptRelaunchOnce()
   }
 }
 
-/** 入力監視権限の設定案内。doubleControl ON かつ未設定時のみ。 */
-export async function guideInputMonitoringIfNeeded(): Promise<void> {
-  if (process.platform !== 'darwin') return
-
-  const config = loadConfig()
-  if (!config.doubleControl) return
-  if (config.inputMonitoringGuideDismissed) return
-  if (inputMonitoringGuideShownThisSession) return
-
-  const { inputMonitoring } = getMacPermissionStatus(true)
-  if (inputMonitoring !== 'needsSetup' && inputMonitoring !== 'failed') return
-
-  inputMonitoringGuideShownThisSession = true
-
-  const appName = app.getName()
-  const bundlePath = getMacAppBundlePath()
-  const pathHint = bundlePath
-    ? `\n\nアプリの場所:\n${bundlePath}`
-    : '\n\n（開発中は Electron 本体を許可するか、配布ビルドで Kotodama.app を追加してください）'
-
+async function promptRelaunchOnce(): Promise<void> {
+  if (relaunchPromptShown) return
+  relaunchPromptShown = true
   const { response } = await dialog.showMessageBox({
     type: 'info',
-    buttons: ['システム設定を開く', 'アプリの場所をコピー', '後で'],
+    buttons: ['再起動', '後で'],
     defaultId: 0,
-    cancelId: 2,
-    title: '入力監視の設定が必要です',
-    message: `Control ダブルタップの録音開始には「入力監視」権限が必要です。`,
-    detail:
-      `① システム設定 > プライバシーとセキュリティ > 入力監視を開く\n` +
-      `② 一覧に ${appName} が無い場合は「＋」を押し、.app を選択して追加\n` +
-      `③ 追加後、${appName} のトグルを ON にする` +
-      pathHint
+    cancelId: 1,
+    title: '再起動が必要です',
+    message: 'アクセシビリティの変更を反映するには Kotodama の再起動が必要です。',
+    detail: '再起動後に、貼り付けと Control ダブルタップが使えるようになります。'
   })
+  if (response === 0) relaunchApp()
+}
 
-  if (response === 0) {
-    await openMacPrivacyPane('inputMonitoring')
-  } else if (response === 1) {
-    if (!copyMacAppBundlePath()) {
-      await dialog.showMessageBox({
+export function relaunchApp(): void {
+  app.relaunch()
+  app.quit()
+}
+
+/**
+ * 権限が足りなければ起動のたびに案内する。配布ビルドのみ。
+ * 「後で」はそのセッション中だけ案内を止める。
+ */
+export async function runMacPermissionOnboarding(): Promise<void> {
+  if (process.platform !== 'darwin' || !app.isPackaged) return
+  if (onboardingDismissedThisSession || onboardingRunning) return
+  if (micState() === 'granted' && accessibilityState() === 'granted') return
+
+  onboardingRunning = true
+  try {
+    const mic = micState()
+    if (mic === 'notDetermined') {
+      const granted = await ensureMicrophoneAccess()
+      if (!granted && micState() === 'denied') await openMacPrivacyPane('microphone')
+    } else if (mic !== 'granted') {
+      const { response } = await dialog.showMessageBox({
         type: 'warning',
-        title: 'コピーできません',
-        message: '配布ビルド（.app）でのみパスをコピーできます。',
-        detail: '開発中はシステム設定で Electron を許可してください。'
+        buttons: ['システム設定を開く', '後で'],
+        defaultId: 0,
+        cancelId: 1,
+        title: 'マイクの許可が必要です',
+        message: '音声入力にはマイクの許可が必要です。',
+        detail: '拒否されていると、Kotodama からは許可ダイアログを再表示できません。'
       })
+      if (response === 1) {
+        onboardingDismissedThisSession = true
+        return
+      }
+      await openMacPrivacyPane('microphone')
     }
-  } else {
-    saveConfig({ inputMonitoringGuideDismissed: true })
+
+    if (accessibilityState() === 'granted') return
+    const { response } = await dialog.showMessageBox({
+      type: 'warning',
+      buttons: ['許可する', '後で'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'アクセシビリティ権限が必要です',
+      message: '貼り付けと Control ダブルタップにはアクセシビリティ権限が必要です。',
+      detail: '次の確認で Kotodama が一覧に追加されます。スイッチをオンにしてください。オンにしても動かないときは、Kotodama を再起動してください。'
+    })
+    if (response === 1) {
+      onboardingDismissedThisSession = true
+      return
+    }
+    systemPreferences.isTrustedAccessibilityClient(true)
+  } finally {
+    onboardingRunning = false
   }
 }
 
-/** 入力監視が likelyOk になったら、または failed が解消されたら dismiss フラグをリセットする。 */
-export function clearInputMonitoringDismissIfResolved(doubleControlEnabled: boolean): void {
-  const config = loadConfig()
-  if (!config.inputMonitoringGuideDismissed) return
-  const { inputMonitoring } = getMacPermissionStatus(doubleControlEnabled)
-  if (inputMonitoring === 'likelyOk' || inputMonitoring === 'notApplicable') {
-    saveConfig({ inputMonitoringGuideDismissed: false })
+/** 許可が揃うまで確認し、揃ったら修飾キー検知を再起動する。 */
+export function startPermissionWatcher(retryDoubleControl: () => void): void {
+  if (process.platform !== 'darwin' || !app.isPackaged || watcher) return
+  const tick = (): void => {
+    if (micState() !== 'granted' || accessibilityState() !== 'granted') return
+    retryDoubleControl()
+    reportHookState()
+    const needsHook = loadConfig().doubleControl
+    if (!needsHook || isDoubleCtrlRunning() || wasUiohookLoadFailed() || restartRequired) {
+      stopWatcher()
+    }
   }
+  watcher = setInterval(tick, 2000)
+  tick()
+}
+
+/** 古い許可が残ってオンなのに効かないとき、許可を消してから再起動する。 */
+export async function resetMacPermissions(): Promise<void> {
+  if (process.platform !== 'darwin') return
+  const { response } = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['リセットして再起動', 'キャンセル'],
+    defaultId: 1,
+    cancelId: 1,
+    title: '権限をリセット',
+    message: 'マイクとアクセシビリティの許可を削除して、Kotodama を再起動します。',
+    detail: '一覧でオンのまま効かないときに使ってください。再起動後に許可を取り直します。'
+  })
+  if (response !== 0) return
+
+  const failures: string[] = []
+  for (const service of TCC_SERVICES) {
+    try {
+      await execFileAsync('tccutil', ['reset', service, BUNDLE_ID])
+    } catch (err) {
+      failures.push(service)
+      console.error(
+        `[kotodama] tccutil reset ${service} failed:`,
+        err instanceof Error ? err.message : err
+      )
+    }
+  }
+  if (failures.length > 0) {
+    await dialog.showMessageBox({
+      type: 'warning',
+      title: '権限をリセットできませんでした',
+      message: 'システム設定から Kotodama の許可を削除してください。',
+      detail:
+        '「プライバシーとセキュリティ」のマイクとアクセシビリティで Kotodama を選び、「−」で削除してから、アプリを再起動してください。'
+    })
+    return
+  }
+  relaunchApp()
 }

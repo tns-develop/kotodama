@@ -27,11 +27,53 @@ npx electron-rebuild -f -w uiohook-napi  # rebuild スクリプト対象外
 
 **API キー**: Tier 1 以上 + Credit balance > $0（[handover §5-2](./handover.md)）。起動後トレイ →「設定…」で保存。
 
-**簡易署名**（macOS の許可を Kotodama に結びつける。Developer ID と公証は後回し）:
+**自己署名**（この Mac の許可を再ビルド後も維持する。Developer ID と公証は後回し）:
 
-`electron-builder.yml` の `mac.identity: "-"` と `mac.forceCodeSigning: true` で、`npm run dist:mac` が必ず簡易署名する。署名できないビルドは失敗する。`CSC_IDENTITY=’-’` は electron-builder 26 では読まれないので使わない。`CSC_IDENTITY_AUTO_DISCOVERY=false` だけだと署名が省略され、識別子が Electron のままになる。
+コード署名用の自己署名証明書 `Kotodama Local Signing`（有効期間 10 年）を専用キーチェーンに作り、コード署名を「常に信頼」にする。
 
-macOS Gatekeeper 警告: `xattr -cr dist/mac*/Kotodama.app` または右クリック →「開く」。
+```bash
+PASS=kotodama
+KC="$HOME/Library/Keychains/kotodama-signing.keychain-db"
+TMP="$(mktemp -d)"
+openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+  -keyout "$TMP/key.pem" -out "$TMP/cert.pem" \
+  -subj "/CN=Kotodama Local Signing" \
+  -addext "basicConstraints=critical,CA:TRUE" \
+  -addext "keyUsage=critical,digitalSignature,keyCertSign" \
+  -addext "extendedKeyUsage=critical,codeSigning"
+openssl pkcs12 -export -out "$TMP/cert.p12" -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
+  -name "Kotodama Local Signing" -passout pass:"$PASS"
+security create-keychain -p "$PASS" "$KC"
+security set-keychain-settings -lut 21600 "$KC"
+security unlock-keychain -p "$PASS" "$KC"
+security import "$TMP/cert.p12" -k "$KC" -P "$PASS" -A -f pkcs12
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASS" "$KC"
+security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
+security default-keychain -s "$HOME/Library/Keychains/login.keychain-db"
+security add-trusted-cert -r trustRoot -p codeSign -k "$HOME/Library/Keychains/login.keychain-db" "$TMP/cert.pem"
+rm -rf "$TMP"
+```
+
+証明書は専用キーチェーン `~/Library/Keychains/kotodama-signing.keychain-db`（パスワード `kotodama`、自動ロック 6 時間）に入る。`add-trusted-cert` では確認ダイアログが一度出る。再起動後にロックされていたら `security unlock-keychain -p kotodama ~/Library/Keychains/kotodama-signing.keychain-db`。
+
+`security find-identity -v -p codesigning` に `Kotodama Local Signing` が出てから `npm run dist:mac` する。
+
+`electron-builder.yml` の `mac.identity` はこの証明書名。`forceCodeSigning: true` のため、証明書が無いビルドは失敗する。`identity: "-"` は名前の部分一致で別の証明書が選ばれるので使わない。証明書を作り直すと署名が変わり、各 Mac で許可を一度取り直す。
+
+CI の Releases は証明書を置かず `--config.mac.identity=-`（ad-hoc）で作る。こちらの DMG は更新のたびに許可が外れる。
+
+macOS Gatekeeper 警告: 自己署名は公証されない。`xattr -cr dist/mac*/Kotodama.app` または右クリック →「開く」。
+
+署名を切り替えたあと、または許可が効かないときの順番:
+
+1. `npm run package:mac`
+2. 起動中の Kotodama を終了する
+3. `ditto dist/mac-arm64/Kotodama.app /Applications/Kotodama.app`（Intel は `dist/mac`）
+4. 初回だけ権限をリセットする（設定の「権限をリセット」、または `tccutil reset Accessibility com.example.kotodama` と Microphone）
+5. 起動し、ウィザードの順（マイク → アクセシビリティ）に従う
+6. 再起動を促されたら再起動し、マイク・貼り付け・Control ダブルタップを確認する
+
+同じ証明書で上書きした 2 回目以降は、手順 4 のリセットは不要。
 
 ---
 
@@ -53,7 +95,7 @@ open dist/mac-arm64/Kotodama.app   # 環境に合わせてパスを読み替え
 dist/mac-arm64/Kotodama.app/Contents/MacOS/Kotodama
 ```
 
-**権限**: 配布ビルドでは **Kotodama.app** を許可（開発時の Electron とは別）。マイク / アクセシビリティ（Cmd+V）/ 入力監視（Control ダブルタップ、設定 `doubleControl` 既定 ON）。入力監視は一覧に無い場合「＋」で `.app` を追加（設定画面の「場所をコピー」可）。
+**権限**: 配布ビルドでは **Kotodama.app** を許可する（開発時の Electron とは別）。マイクとアクセシビリティ（貼り付けと Control ダブルタップ）。初回起動のウィザードがこの順で案内する。一覧でオンなのに効かないときは設定の「権限をリセット」のあと、促されたら再起動する。
 
 チェックリスト（下記）を実施し、検証記録に記入。
 
